@@ -1,0 +1,380 @@
+.auth-page {
+  align-items: center;
+  background: var(--bg);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.auth-shell {
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.86fr) minmax(360px, 1fr);
+  max-width: 1100px;
+  min-height: min(760px, calc(100vh - 4rem));
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.auth-panel {
+  align-content: center;
+  border-right: 1px solid var(--border);
+  display: grid;
+  padding: clamp(2rem, 5vw, 4.2rem);
+}
+
+.brand-lockup {
+  align-items: center;
+  display: flex;
+  gap: 0.9rem;
+  margin-bottom: clamp(2rem, 5vh, 4rem);
+
+  p {
+    color: var(--muted);
+    font-size: 0.86rem;
+    line-height: 1.35;
+    margin: 0.15rem 0 0;
+  }
+}
+
+.brand-mark {
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  display: inline-flex;
+  height: 3rem;
+  position: relative;
+  width: 3rem;
+
+  &::after {
+    border-bottom: 3px solid var(--primary);
+    border-left: 3px solid var(--primary);
+    content: "";
+    height: 0.55rem;
+    left: 0.75rem;
+    position: absolute;
+    top: 0.85rem;
+    transform: rotate(-45deg);
+    width: 1.15rem;
+  }
+}
+
+.brand {
+  color: var(--text);
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.auth-heading {
+  margin-bottom: 2rem;
+
+  h1 {
+    color: var(--text);
+    font-size: clamp(2.25rem, 4vw, 3.35rem);
+    font-weight: 850;
+    letter-spacing: 0;
+    line-height: 1.05;
+    margin: 0;
+  }
+
+  p {
+    color: var(--text-soft);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 1rem 0 0;
+    max-width: 29rem;
+  }
+}
+
+form {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.field {
+  color: var(--text);
+  display: block;
+
+  > span:first-child {
+    display: block;
+    font-size: 0.92rem;
+    font-weight: 750;
+    margin-bottom: 0.55rem;
+  }
+}
+
+.input-shell {
+  display: block;
+  position: relative;
+
+  &::before {
+    border: 2px solid var(--muted);
+    content: "";
+    height: 1rem;
+    left: 1rem;
+    opacity: 0.9;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    z-index: 1;
+  }
+}
+
+.input-shell-user::before {
+  border-radius: 999px;
+  height: 0.85rem;
+  top: 42%;
+  width: 0.85rem;
+}
+
+.input-shell-user::after {
+  border: 2px solid var(--muted);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  content: "";
+  height: 0.55rem;
+  left: 0.86rem;
+  opacity: 0.9;
+  position: absolute;
+  top: 54%;
+  width: 1.2rem;
+}
+
+.input-shell-lock::before {
+  border-radius: 4px;
+  height: 0.86rem;
+  margin-top: 0.18rem;
+  width: 0.92rem;
+}
+
+.input-shell-lock::after {
+  border: 2px solid var(--muted);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  content: "";
+  height: 0.62rem;
+  left: 1.08rem;
+  opacity: 0.9;
+  position: absolute;
+  top: 1rem;
+  width: 0.72rem;
+}
+
+input {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text);
+  min-height: 3.75rem;
+  outline: none;
+  padding: 0.95rem 1rem 0.95rem 3.35rem;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+  width: 100%;
+
+  &::placeholder {
+    color: var(--muted);
+  }
+}
+
+input:focus {
+  background: var(--surface-raised);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgb(59 130 246 / 18%);
+}
+
+.auth-error {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+
+  img {
+    flex: 0 0 auto;
+    height: 2.3rem;
+    object-fit: contain;
+    width: 2.3rem;
+  }
+}
+
+.primary-button {
+  align-items: center;
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 800;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.4rem;
+  min-height: 3.8rem;
+  padding: 0.9rem 1.15rem;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  transform: translateY(-1px);
+}
+
+.switch-link {
+  color: var(--text-soft);
+  font-size: 1rem;
+  margin: 2rem 0 0;
+  text-align: center;
+
+  a {
+    font-weight: 800;
+  }
+}
+
+.auth-illustration {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 560px;
+  padding: clamp(2rem, 4vw, 4rem);
+  position: relative;
+
+  img {
+    display: block;
+    max-height: 620px;
+    max-width: min(100%, 520px);
+    object-fit: contain;
+    position: relative;
+    width: 100%;
+    z-index: 1;
+  }
+}
+
+.floating-card {
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  position: absolute;
+}
+
+.card-check {
+  height: 4.4rem;
+  left: 18%;
+  top: 17%;
+  width: 4.4rem;
+
+  &::after {
+    border-bottom: 4px solid var(--text);
+    border-left: 4px solid var(--text);
+    content: "";
+    height: 0.8rem;
+    left: 1.2rem;
+    position: absolute;
+    top: 1.35rem;
+    transform: rotate(-45deg);
+    width: 1.65rem;
+  }
+}
+
+.card-list {
+  height: 5.4rem;
+  right: 15%;
+  top: 17%;
+  width: 7rem;
+
+  &::before,
+  &::after {
+    background: var(--primary);
+    border-radius: 999px;
+    box-shadow:
+      0 1.55rem 0 var(--primary),
+      0 3.1rem 0 var(--primary);
+    content: "";
+    height: 0.7rem;
+    left: 1rem;
+    position: absolute;
+    top: 0.8rem;
+    width: 0.7rem;
+  }
+
+  &::after {
+    background: var(--text);
+    border-radius: 999px;
+    box-shadow:
+      0 1.55rem 0 var(--text),
+      0 3.1rem 0 var(--text);
+    height: 0.12rem;
+    left: 2.3rem;
+    top: 1.08rem;
+    width: 3.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+    max-width: 620px;
+  }
+
+  .auth-panel {
+    border-right: 0;
+    padding: 2rem;
+  }
+
+  .auth-illustration {
+    border-top: 1px solid var(--border);
+    min-height: 320px;
+    padding: 1.5rem 2rem 2rem;
+
+    img {
+      max-height: 320px;
+    }
+  }
+
+  .floating-card {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .auth-page {
+    padding: 0.75rem;
+  }
+
+  .auth-shell {
+    min-height: auto;
+  }
+
+  .auth-panel {
+    padding: 1.25rem;
+  }
+
+  .brand {
+    font-size: 1.45rem;
+  }
+
+  .brand-mark {
+    height: 2.6rem;
+    width: 2.6rem;
+  }
+
+  .auth-heading h1 {
+    font-size: 2rem;
+  }
+
+  input,
+  .primary-button {
+    min-height: 3.35rem;
+  }
+}

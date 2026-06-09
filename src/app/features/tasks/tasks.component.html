@@ -1,0 +1,235 @@
+<main class="tasks-page">
+  <aside class="sidebar" aria-label="Навигация по задачам">
+    <div class="brand-lockup">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <span class="brand">Мои задачи</span>
+        <p>Ваш день под контролем.</p>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button
+        class="nav-item"
+        type="button"
+        [class.active]="activeFilter === 'all'"
+        (click)="setFilter('all')"
+      >
+        <span class="nav-icon grid-icon" aria-hidden="true"></span>
+        Все задачи
+      </button>
+      <button
+        class="nav-item"
+        type="button"
+        [class.active]="activeFilter === 'active'"
+        (click)="setFilter('active')"
+      >
+        <span class="nav-icon list-icon" aria-hidden="true"></span>
+        Активные
+      </button>
+      <button
+        class="nav-item"
+        type="button"
+        [class.active]="activeFilter === 'completed'"
+        (click)="setFilter('completed')"
+      >
+        <span class="nav-icon check-icon" aria-hidden="true"></span>
+        Завершенные
+      </button>
+    </nav>
+
+    <div class="sidebar-card">
+      <img src="assets/sprites/success-character.png" alt="" aria-hidden="true">
+      <h2>{{ totalCount }}</h2>
+      <p>задач в вашем списке</p>
+    </div>
+
+    <button class="logout-button" type="button" (click)="logout()">
+      <span aria-hidden="true">↪</span>
+      Выйти
+    </button>
+  </aside>
+
+  <section class="task-board">
+    <header class="topbar">
+      <div>
+        <h1>Мои задачи</h1>
+        <p>Создавайте задачи, меняйте статусы и держите фокус на главном.</p>
+      </div>
+
+      <button
+        class="primary-button board-submit"
+        type="submit"
+        form="task-editor-form"
+        [disabled]="isSaving"
+      >
+        <img src="assets/sprites/plus-blue-pill.png" alt="" aria-hidden="true">
+        {{ isSaving ? 'Сохраняем...' : editingTaskId ? 'Сохранить' : 'Добавить задачу' }}
+      </button>
+    </header>
+
+    <div class="workspace">
+      <section class="task-list" aria-labelledby="task-list-title">
+        <div class="list-header tasks-list__header">
+          <div class="tasks-list__title-block">
+            <h2 id="task-list-title">Список задач</h2>
+            <span class="count-label">{{ filteredTasks.length }} из {{ totalCount }}</span>
+          </div>
+
+          <div class="filters tasks-filters" role="group" aria-label="Фильтр по статусу">
+            @for (filter of filters; track filter.value) {
+              <button
+                class="filter-button"
+                type="button"
+                [class.active]="activeFilter === filter.value"
+                [class.filter-button--active]="activeFilter === filter.value"
+                (click)="setFilter(filter.value)"
+              >
+                {{ filter.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (listErrorMessage) {
+          <div class="server-error list-error">
+            <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
+            <span>{{ listErrorMessage }}</span>
+          </div>
+        }
+
+        @if (isLoading) {
+          <div class="empty-state compact-state">
+            <span class="loader" aria-hidden="true"></span>
+            <h3>Загрузка задач...</h3>
+          </div>
+        } @else if (!filteredTasks.length) {
+          <div class="empty-state">
+            <img src="assets/sprites/empty-checklist-sad.png" alt="Пустой список задач">
+            <h3>Задач пока нет</h3>
+            <p>Добавьте новую задачу или измените фильтр, чтобы увидеть список.</p>
+            <button class="secondary-button" type="submit" form="task-editor-form">
+              Добавить задачу
+            </button>
+          </div>
+        } @else {
+          <div class="tasks">
+            @for (task of filteredTasks; track trackByTaskId($index, task)) {
+              <article class="task-item task-card" [class.completed]="task.completed">
+                <div class="task-card__check">
+                  <button
+                    class="status-toggle"
+                    type="button"
+                    [class.checked]="task.completed"
+                    [attr.aria-label]="task.completed ? 'Отметить активной' : 'Отметить выполненной'"
+                    (click)="toggleCompleted(task)"
+                  >
+                    <span></span>
+                  </button>
+                </div>
+
+                <div class="task-content task-card__content">
+                  <h3 class="task-card__title">{{ task.title }}</h3>
+                  <p class="task-card__description">{{ task.description }}</p>
+                </div>
+
+                <div class="task-card__meta">
+                  <span class="status-pill task-status" [class.done]="task.completed">
+                    {{ task.completed ? 'Выполнена' : 'Активная' }}
+                  </span>
+                </div>
+
+                <div class="task-actions task-card__actions">
+                  <button
+                    type="button"
+                    class="icon-button task-action edit-button"
+                    title="Редактировать"
+                    (click)="startEdit(task)"
+                  >
+                    <img src="assets/sprites/edit-pencil-gray.png" alt="" aria-hidden="true">
+                    <span class="sr-only">Редактировать</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-button task-action danger-button"
+                    title="Удалить"
+                    (click)="deleteTask(task)"
+                  >
+                    <img src="assets/sprites/trash-red.png" alt="" aria-hidden="true">
+                    <span class="sr-only">Удалить</span>
+                  </button>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <aside class="task-side">
+        <form
+          id="task-editor-form"
+          class="task-form"
+          [formGroup]="taskForm"
+          (ngSubmit)="submitTask()"
+          novalidate
+        >
+          <div class="form-heading">
+            <div>
+              <span>Рабочая область</span>
+              <h2>{{ editingTaskId ? 'Редактирование' : 'Новая задача' }}</h2>
+            </div>
+            @if (editingTaskId) {
+              <button class="link-button" type="button" (click)="resetForm()">Отменить</button>
+            }
+          </div>
+
+          <label class="field">
+            <span>Название</span>
+            <input type="text" formControlName="title" placeholder="Например: Купить продукты">
+            @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
+              <small class="field-error">Название обязательно.</small>
+            }
+          </label>
+
+          <label class="field">
+            <span>Описание</span>
+            <textarea
+              rows="5"
+              formControlName="description"
+              placeholder="Добавьте детали задачи"
+            ></textarea>
+            @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
+              <small class="field-error">Описание обязательно.</small>
+            }
+          </label>
+
+          <label class="checkbox-row">
+            <input type="checkbox" formControlName="completed">
+            <span>Выполнена</span>
+          </label>
+
+          @if (activeFilter === 'completed' && filteredTasks.length > 0) {
+            <div class="success-note">
+              <img src="assets/sprites/success-character.png" alt="Завершенные задачи">
+              <p>Готовые задачи собраны здесь.</p>
+            </div>
+          }
+
+          @if (formErrorMessage) {
+            <div class="server-error form-error">
+              <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
+              <span>{{ formErrorMessage }}</span>
+            </div>
+          }
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit" [disabled]="isSaving">
+              <img src="assets/sprites/plus-blue-pill.png" alt="" aria-hidden="true">
+              {{ isSaving ? 'Сохраняем...' : editingTaskId ? 'Сохранить' : 'Создать' }}
+            </button>
+          </div>
+        </form>
+      </aside>
+    </div>
+  </section>
+</main>

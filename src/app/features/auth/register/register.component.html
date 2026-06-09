@@ -1,0 +1,73 @@
+<main class="auth-page">
+  <section class="auth-shell" aria-labelledby="register-title">
+    <div class="auth-panel">
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <span class="brand">Мои задачи</span>
+          <p>Ваш день под контролем.</p>
+        </div>
+      </div>
+
+      <div class="auth-heading">
+        <h1 id="register-title">Создайте аккаунт</h1>
+        <p>Зарегистрируйтесь, чтобы сохранять задачи и отмечать прогресс.</p>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <label class="field">
+          <span>Имя пользователя</span>
+          <span class="input-shell input-shell-user">
+            <input
+              type="text"
+              formControlName="username"
+              autocomplete="username"
+              placeholder="Введите имя пользователя"
+            >
+          </span>
+          @if (form.controls.username.touched && form.controls.username.invalid) {
+            <small class="field-error">Имя пользователя обязательно.</small>
+          }
+        </label>
+
+        <label class="field">
+          <span>Пароль</span>
+          <span class="input-shell input-shell-lock">
+            <input
+              type="password"
+              formControlName="password"
+              autocomplete="new-password"
+              placeholder="Введите пароль"
+            >
+          </span>
+          @if (form.controls.password.touched && form.controls.password.invalid) {
+            <small class="field-error">Пароль обязателен.</small>
+          }
+        </label>
+
+        @if (errorMessage) {
+          <div class="server-error auth-error">
+            <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <button class="primary-button" type="submit" [disabled]="isSubmitting">
+          <span aria-hidden="true">→</span>
+          {{ isSubmitting ? 'Создаем...' : 'Зарегистрироваться' }}
+        </button>
+      </form>
+
+      <p class="switch-link">
+        Уже есть аккаунт?
+        <a routerLink="/login">Войти</a>
+      </p>
+    </div>
+
+    <aside class="auth-illustration" aria-hidden="true">
+      <span class="floating-card card-check"></span>
+      <span class="floating-card card-list"></span>
+      <img src="assets/sprites/login-hero-man-laptop.png" alt="">
+    </aside>
+  </section>
+</main>
