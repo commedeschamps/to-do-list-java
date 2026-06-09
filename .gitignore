@@ -37,3 +37,7 @@ src/main/resources/application.properties
 
 ### VS Code ###
 .vscode/
+
+### Angular ###
+node_modules/
+.angular/cache/
