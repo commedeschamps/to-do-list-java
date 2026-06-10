@@ -3,6 +3,7 @@ package com.example.todolist.controller;
 import com.example.todolist.dto.AuthRequest;
 import com.example.todolist.security.JwtUtil;
 import com.example.todolist.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,13 +25,13 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody AuthRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody AuthRequest request) {
         userService.register(request.getUsername(), request.getPassword());
         return ResponseEntity.ok("Registered succesfully");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody AuthRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody AuthRequest request) {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
         String token = jwtUtil.generateToken(request.getUsername());
         return ResponseEntity.ok(token);

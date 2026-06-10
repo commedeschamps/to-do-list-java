@@ -2,11 +2,13 @@ package com.example.todolist.service;
 
 import com.example.todolist.entity.User;
 import com.example.todolist.repository.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -31,8 +33,14 @@ public class UserService implements UserDetailsService {
     }
 
     public void register(String username, String password) {
+        String normalizedUsername = username.trim();
+
+        if (userRepository.findByUsername(normalizedUsername).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Имя пользователя уже занято");
+        }
+
         User user = new User();
-        user.setUsername(username);
+        user.setUsername(normalizedUsername);
         user.setPassword(passwordEncoder.encode(password));
         userRepository.save(user);
     }

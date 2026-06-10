@@ -25,6 +25,9 @@ public class Task {
 
     private boolean completed = false;
 
+    @Column(nullable = false)
+    private String priority = "medium";
+
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

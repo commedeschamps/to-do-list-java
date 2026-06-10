@@ -25,12 +25,12 @@ public class TaskController {
     @PostMapping
     public ResponseEntity<?> create(@RequestBody TaskRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        return ResponseEntity.ok(taskService.createTask(username, request.getTitle(), request.getDescription()));
+        return ResponseEntity.ok(taskService.createTask(username, request.getTitle(), request.getDescription(), request.getPriority()));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody TaskRequest request) {
-        return ResponseEntity.ok(taskService.updateTask(id, request.getTitle(), request.getDescription(), request.isCompleted()));
+        return ResponseEntity.ok(taskService.updateTask(id, request.getTitle(), request.getDescription(), request.isCompleted(), request.getPriority()));
     }
 
     @DeleteMapping("/{id}")
