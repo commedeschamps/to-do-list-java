@@ -1,0 +1,64 @@
+<section class="tasks-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Приоритеты</p>
+      <h2>Работа по важности</h2>
+      <p>Задачи сгруппированы по уровню приоритета, чтобы быстрее выбрать следующий шаг.</p>
+    </div>
+  </section>
+
+  @if (listErrorMessage) {
+    <div class="server-error list-error">{{ listErrorMessage }}</div>
+  }
+
+  <div class="priority-board" [attr.aria-busy]="isLoading">
+    @for (group of groups; track trackByGroup($index, group)) {
+      <section class="priority-column" [attr.aria-labelledby]="'priority-' + group.value">
+        <header class="priority-column__header">
+          <div>
+            <h2 [id]="'priority-' + group.value">{{ group.label }}</h2>
+            <p>{{ group.description }}</p>
+          </div>
+          <span class="priority-badge" [ngClass]="priorityClass(group.value)">
+            {{ tasksByPriority(group.value).length }}
+          </span>
+        </header>
+
+        <div class="priority-column__body">
+          @if (isLoading) {
+            @for (item of [0, 1]; track item) {
+              <article class="task-skeleton task-skeleton--compact" aria-hidden="true">
+                <span class="task-skeleton__content">
+                  <span class="skeleton task-skeleton__title"></span>
+                  <span class="skeleton task-skeleton__description"></span>
+                </span>
+              </article>
+            }
+          } @else if (!tasksByPriority(group.value).length) {
+            <div class="compact-empty-state">
+              <h3>Пока пусто</h3>
+              <p>Задач с этим приоритетом нет.</p>
+            </div>
+          } @else {
+            @for (task of tasksByPriority(group.value); track trackByTaskId($index, task)) {
+              <article class="task-card task-card--stacked" [class.completed]="task.completed">
+                <div class="task-card__content">
+                  <h3 class="task-card__title">{{ task.title }}</h3>
+                  <p class="task-card__description">{{ task.description }}</p>
+                </div>
+                <div class="task-card__meta">
+                  <span class="priority-badge" [ngClass]="priorityClass(taskPriority(task))">
+                    {{ priorityLabel(taskPriority(task)) }}
+                  </span>
+                  <span class="status-badge" [class.done]="task.completed">
+                    {{ task.completed ? 'Выполнена' : 'Активная' }}
+                  </span>
+                </div>
+              </article>
+            }
+          }
+        </div>
+      </section>
+    }
+  </div>
+</section>

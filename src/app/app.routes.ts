@@ -18,15 +18,42 @@ export const routes: Routes = [
       )
   },
   {
-    path: 'tasks',
+    path: '',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/tasks/tasks.component').then((m) => m.TasksComponent)
-  },
-  {
-    path: '',
-    pathMatch: 'full',
-    redirectTo: 'tasks'
+      import('./layout/app-shell/app-shell.component').then((m) => m.AppShellComponent),
+    children: [
+      {
+        path: 'tasks',
+        loadComponent: () =>
+          import('./features/tasks/tasks.component').then((m) => m.TasksComponent)
+      },
+      {
+        path: 'today',
+        loadComponent: () =>
+          import('./features/today/today.component').then((m) => m.TodayComponent)
+      },
+      {
+        path: 'priorities',
+        loadComponent: () =>
+          import('./features/priorities/priorities.component').then((m) => m.PrioritiesComponent)
+      },
+      {
+        path: 'stats',
+        loadComponent: () =>
+          import('./features/stats/stats.component').then((m) => m.StatsComponent)
+      },
+      {
+        path: 'settings',
+        loadComponent: () =>
+          import('./features/settings/settings.component').then((m) => m.SettingsComponent)
+      },
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'tasks'
+      }
+    ]
   },
   {
     path: '**',

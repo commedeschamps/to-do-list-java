@@ -1,0 +1,105 @@
+<section class="tasks-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Настройки</p>
+      <h2>Профиль и интерфейс</h2>
+      <p>Настройте отображаемые данные профиля и поведение интерфейса.</p>
+    </div>
+  </section>
+
+  <div class="settings-layout">
+    <section class="settings-card" aria-labelledby="profile-settings-title">
+      <header class="settings-card__header">
+        <h2 id="profile-settings-title">Профиль</h2>
+        <p>Эти данные будут отображаться в вашем профиле.</p>
+      </header>
+
+      <form class="settings-form" [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+        <div class="avatar-editor">
+          <p class="avatar-editor__label">Фото профиля</p>
+          <div class="avatar-editor__preview" aria-hidden="true">
+            @if (avatarPreview) {
+              <img [src]="avatarPreview" alt="">
+            } @else {
+              {{ profileInitial }}
+            }
+          </div>
+
+          <div class="avatar-editor__controls">
+            <label class="avatar-upload" for="avatar-input">
+              <span>Загрузить фото</span>
+              <input
+                id="avatar-input"
+                type="file"
+                accept="image/*"
+                (change)="onAvatarSelected($event)"
+              >
+            </label>
+            <button class="btn btn--secondary" type="button" [disabled]="!avatarPreview" (click)="removeAvatar()">
+              Удалить фото
+            </button>
+            <p class="settings-help">Поддерживаются PNG, JPG, WebP и GIF до 2 МБ.</p>
+            @if (avatarErrorMessage) {
+              <p class="form-error">{{ avatarErrorMessage }}</p>
+            }
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="display-name">Имя пользователя</label>
+          <input id="display-name" type="text" formControlName="displayName" autocomplete="name">
+        </div>
+
+        <div class="form-field">
+          <label for="profile-email">Email</label>
+          <input id="profile-email" type="email" formControlName="email" autocomplete="email">
+          @if (profileForm.controls.email.touched && profileForm.controls.email.invalid) {
+            <small class="form-error">Введите корректный email.</small>
+          }
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn btn--primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card" aria-labelledby="interface-settings-title">
+      <header class="settings-card__header">
+        <h2 id="interface-settings-title">Интерфейс</h2>
+        <p>Настройки отображения сохраняются на этом устройстве.</p>
+      </header>
+
+      <form class="settings-form" [formGroup]="uiForm" (ngSubmit)="saveUiSettings()">
+        <label class="settings-toggle">
+          <input type="checkbox" formControlName="compactMode" (change)="saveUiSettings()">
+          <span>
+            <strong>Компактный режим</strong>
+            <small>Делает интерфейс плотнее.</small>
+          </span>
+        </label>
+
+        <label class="settings-toggle">
+          <input type="checkbox" formControlName="reduceMotion" (change)="saveUiSettings()">
+          <span>
+            <strong>Уменьшить анимации</strong>
+            <small>Делает движения интерфейса менее заметными.</small>
+          </span>
+        </label>
+
+        <div class="settings-actions">
+          <button class="btn btn--primary" type="submit">Сохранить интерфейс</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card settings-card--danger" aria-labelledby="account-settings-title">
+      <header class="settings-card__header">
+        <h2 id="account-settings-title">Аккаунт</h2>
+        <p>Выход завершит текущую сессию и вернет на экран входа.</p>
+      </header>
+
+      <button class="btn btn--danger" type="button" (click)="logout()">Выйти</button>
+    </section>
+  </div>
+</section>

@@ -1,0 +1,91 @@
+<section class="tasks-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Статистика</p>
+      <h2>Состояние списка</h2>
+      <p>Короткий обзор прогресса и распределения задач.</p>
+    </div>
+  </section>
+
+  @if (listErrorMessage) {
+    <div class="server-error list-error">{{ listErrorMessage }}</div>
+  }
+
+  @if (isLoading) {
+    <div class="tasks-stats" aria-hidden="true">
+      @for (item of [0, 1, 2, 3]; track item) {
+        <article class="stat-card stat-card--skeleton">
+          <span class="skeleton stat-skeleton__label"></span>
+          <span class="skeleton stat-skeleton__value"></span>
+          <span class="skeleton stat-skeleton__hint"></span>
+        </article>
+      }
+    </div>
+  } @else {
+    <section class="tasks-stats" aria-label="Сводная статистика">
+      <article class="stat-card">
+        <p class="stat-card__label">Всего</p>
+        <p class="stat-card__value">{{ totalCount }}</p>
+        <p class="stat-card__hint">задач в списке</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Активные</p>
+        <p class="stat-card__value">{{ activeCount }}</p>
+        <p class="stat-card__hint">требуют внимания</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Выполненные</p>
+        <p class="stat-card__value">{{ completedCount }}</p>
+        <p class="stat-card__hint">закрытые задачи</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Высокий приоритет</p>
+        <p class="stat-card__value">{{ highPriorityCount }}</p>
+        <p class="stat-card__hint">важные задачи</p>
+      </article>
+    </section>
+
+    <section class="tasks-progress" aria-label="Прогресс выполнения">
+      <div class="tasks-progress__header">
+        <div>
+          <p class="tasks-progress__title">Процент выполнения</p>
+          <p class="tasks-progress__meta">{{ progressMeta }}</p>
+        </div>
+        <strong class="tasks-progress__percent">{{ progressPercent }}%</strong>
+      </div>
+      <div
+        class="tasks-progress__track"
+        role="progressbar"
+        [attr.aria-valuenow]="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span class="tasks-progress__bar" [style.width.%]="progressPercent"></span>
+      </div>
+    </section>
+
+    <section class="tasks-panel" aria-labelledby="priority-distribution-title">
+      <div class="tasks-panel__header">
+        <div class="tasks-list__title-block">
+          <h2 id="priority-distribution-title">Распределение по приоритетам</h2>
+          <span class="count-label">Задачи по уровню важности.</span>
+        </div>
+      </div>
+      <div class="tasks-panel__body">
+        <div class="priority-bars">
+          @for (metric of priorityMetrics; track trackByPriority($index, metric)) {
+            <div class="priority-bar">
+              <div class="priority-bar__header">
+                <span>{{ metric.label }}</span>
+                <strong>{{ metric.count }} / {{ metric.percent }}%</strong>
+              </div>
+              <div class="priority-bar__track" aria-hidden="true">
+                <span class="priority-bar__value" [ngClass]="priorityClass(metric.value)" [style.width.%]="metric.percent"></span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+  }
+</section>

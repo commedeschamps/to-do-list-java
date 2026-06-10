@@ -19,7 +19,9 @@ export class TaskService {
   createTask(payload: TaskPayload): Observable<Task> {
     return this.http.post<Task>(this.apiUrl, {
       title: payload.title,
-      description: payload.description
+      description: payload.description,
+      completed: payload.completed ?? false,
+      priority: payload.priority ?? 'medium'
     });
   }
 

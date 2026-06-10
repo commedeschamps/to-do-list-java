@@ -253,8 +253,9 @@ input:focus {
 
   img {
     display: block;
-    max-height: 620px;
-    max-width: min(100%, 520px);
+    height: auto;
+    max-height: 560px;
+    max-width: min(100%, 460px);
     object-fit: contain;
     position: relative;
     width: 100%;
@@ -338,7 +339,8 @@ input:focus {
     padding: 1.5rem 2rem 2rem;
 
     img {
-      max-height: 320px;
+      max-height: 300px;
+      max-width: min(100%, 340px);
     }
   }
 
@@ -376,5 +378,9 @@ input:focus {
   input,
   .primary-button {
     min-height: 3.35rem;
+  }
+
+  .auth-illustration {
+    display: none;
   }
 }

@@ -1,0 +1,104 @@
+<section class="tasks-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Фокус дня</p>
+      <h2>Сегодня</h2>
+      <p>Задачи, которые требуют внимания сейчас.</p>
+    </div>
+  </section>
+
+  @if (isLoading) {
+    <div class="tasks-stats" aria-hidden="true">
+      @for (item of [0, 1, 2]; track item) {
+        <article class="stat-card stat-card--skeleton">
+          <span class="skeleton stat-skeleton__label"></span>
+          <span class="skeleton stat-skeleton__value"></span>
+          <span class="skeleton stat-skeleton__hint"></span>
+        </article>
+      }
+    </div>
+  } @else {
+    <section class="tasks-stats tasks-stats--three" aria-label="Статистика дня">
+      <article class="stat-card">
+        <p class="stat-card__label">Активные</p>
+        <p class="stat-card__value">{{ activeCount }}</p>
+        <p class="stat-card__hint">на сегодня</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Высокий приоритет</p>
+        <p class="stat-card__value">{{ highPriorityCount }}</p>
+        <p class="stat-card__hint">важные задачи</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Выполненные</p>
+        <p class="stat-card__value">{{ completedCount }}</p>
+        <p class="stat-card__hint">уже закрыты</p>
+      </article>
+    </section>
+  }
+
+  <section class="tasks-panel" aria-labelledby="today-list-title" [attr.aria-busy]="isLoading">
+    <div class="tasks-panel__header">
+      <div class="tasks-list__title-block">
+        <h2 id="today-list-title">Задачи на сегодня</h2>
+        <span class="count-label">{{ activeTasks.length }} активных</span>
+      </div>
+    </div>
+
+    @if (listErrorMessage) {
+      <div class="server-error list-error">{{ listErrorMessage }}</div>
+    }
+
+    <div class="tasks-panel__body">
+      @if (isLoading) {
+        <div class="tasks tasks-skeleton-list" aria-hidden="true">
+          @for (item of [0, 1, 2]; track item) {
+            <article class="task-skeleton">
+              <span class="skeleton task-skeleton__checkbox"></span>
+              <span class="task-skeleton__content">
+                <span class="skeleton task-skeleton__title"></span>
+                <span class="skeleton task-skeleton__description"></span>
+              </span>
+              <span class="skeleton task-skeleton__badge"></span>
+            </article>
+          }
+        </div>
+      } @else if (!activeTasks.length) {
+        <div class="tasks-empty tasks-empty--compact">
+          <img class="tasks-empty__image" src="assets/sprites/success-character.png" alt="На сегодня задач нет">
+          <div>
+            <h3 class="tasks-empty__title">На сегодня задач нет</h3>
+            <p class="tasks-empty__text">Все активные задачи закрыты или список пока пуст.</p>
+          </div>
+        </div>
+      } @else {
+        <div class="tasks">
+          @for (task of activeTasks; track trackByTaskId($index, task)) {
+            <article class="task-item task-card">
+              <div class="task-card__check">
+                <button
+                  class="status-toggle"
+                  type="button"
+                  aria-label="Отметить выполненной"
+                  (click)="toggleCompleted(task)"
+                >
+                  <span></span>
+                </button>
+              </div>
+              <div class="task-card__content">
+                <h3 class="task-card__title">{{ task.title }}</h3>
+                <p class="task-card__description">{{ task.description }}</p>
+              </div>
+              <div class="task-card__meta">
+                <span class="priority-badge" [ngClass]="priorityClass(taskPriority(task))">
+                  {{ priorityLabel(taskPriority(task)) }}
+                </span>
+                <span class="status-badge">Активная</span>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </div>
+  </section>
+</section>

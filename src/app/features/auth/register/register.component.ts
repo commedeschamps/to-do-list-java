@@ -40,9 +40,9 @@ export class RegisterComponent {
         this.isSubmitting = false;
         void this.router.navigateByUrl('/login');
       },
-      error: () => {
+      error: (error: unknown) => {
         this.isSubmitting = false;
-        this.errorMessage = 'Не удалось создать аккаунт. Проверьте данные.';
+        this.errorMessage = this.authService.getRegisterErrorMessage(error);
       }
     });
   }

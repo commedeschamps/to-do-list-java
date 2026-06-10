@@ -1,120 +1,270 @@
-<main class="tasks-page">
-  <aside class="sidebar" aria-label="Навигация по задачам">
-    <div class="brand-lockup">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <div>
-        <span class="brand">Мои задачи</span>
-        <p>Ваш день под контролем.</p>
-      </div>
+<section class="tasks-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Панель задач</p>
+      <h2>Добрый день!</h2>
+      <p>Создавайте задачи, меняйте статусы и держите фокус на главном.</p>
     </div>
 
-    <nav class="sidebar-nav">
-      <button
-        class="nav-item"
-        type="button"
-        [class.active]="activeFilter === 'all'"
-        (click)="setFilter('all')"
-      >
-        <span class="nav-icon grid-icon" aria-hidden="true"></span>
-        Все задачи
-      </button>
-      <button
-        class="nav-item"
-        type="button"
-        [class.active]="activeFilter === 'active'"
-        (click)="setFilter('active')"
-      >
-        <span class="nav-icon list-icon" aria-hidden="true"></span>
-        Активные
-      </button>
-      <button
-        class="nav-item"
-        type="button"
-        [class.active]="activeFilter === 'completed'"
-        (click)="setFilter('completed')"
-      >
-        <span class="nav-icon check-icon" aria-hidden="true"></span>
-        Завершенные
-      </button>
-    </nav>
-
-    <div class="sidebar-card">
-      <img src="assets/sprites/success-character.png" alt="" aria-hidden="true">
-      <h2>{{ totalCount }}</h2>
-      <p>задач в вашем списке</p>
-    </div>
-
-    <button class="logout-button" type="button" (click)="logout()">
-      <span aria-hidden="true">↪</span>
-      Выйти
+    <button class="btn btn--primary tasks-hero__action" type="button" [disabled]="isSaving" (click)="openCreateModal($event)">
+      <span class="btn__icon btn__icon--asset" aria-hidden="true">
+        <img src="assets/sprites/plus-blue-pill.svg" alt="">
+      </span>
+      <span>Добавить задачу</span>
     </button>
-  </aside>
+  </section>
 
-  <section class="task-board">
-    <header class="topbar">
-      <div>
-        <h1>Мои задачи</h1>
-        <p>Создавайте задачи, меняйте статусы и держите фокус на главном.</p>
+  @if (isLoading) {
+    <div class="tasks-stats" aria-hidden="true">
+      @for (item of statSkeletonItems; track item) {
+        <article class="stat-card stat-card--skeleton">
+          <div class="stat-card__top">
+            <span class="skeleton stat-skeleton__label"></span>
+            <span class="skeleton stat-skeleton__icon"></span>
+          </div>
+          <span class="skeleton stat-skeleton__value"></span>
+          <span class="skeleton stat-skeleton__hint"></span>
+        </article>
+      }
+    </div>
+
+    <section class="tasks-progress" aria-hidden="true">
+      <div class="tasks-progress__header">
+        <div>
+          <span class="skeleton progress-skeleton__label"></span>
+          <span class="skeleton progress-skeleton__meta"></span>
+        </div>
+        <span class="skeleton progress-skeleton__value"></span>
+      </div>
+      <div class="skeleton tasks-progress__track"></div>
+    </section>
+  } @else {
+    <section class="tasks-stats" aria-label="Статистика задач">
+      <article class="stat-card">
+        <div class="stat-card__top">
+          <p class="stat-card__label">Всего</p>
+          <span class="stat-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M9 6h11" />
+              <path d="M9 12h11" />
+              <path d="M9 18h11" />
+              <path d="m4 6 1 1 2-2" />
+              <path d="m4 12 1 1 2-2" />
+              <path d="m4 18 1 1 2-2" />
+            </svg>
+          </span>
+        </div>
+        <p class="stat-card__value">{{ totalCount }}</p>
+        <p class="stat-card__hint">задач в списке</p>
+      </article>
+
+      <article class="stat-card">
+        <div class="stat-card__top">
+          <p class="stat-card__label">Активные</p>
+          <span class="stat-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M12 8v5l3 2" />
+              <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />
+            </svg>
+          </span>
+        </div>
+        <p class="stat-card__value">{{ activeCount }}</p>
+        <p class="stat-card__hint">требуют внимания</p>
+      </article>
+
+      <article class="stat-card">
+        <div class="stat-card__top">
+          <p class="stat-card__label">Выполненные</p>
+          <span class="stat-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </span>
+        </div>
+        <p class="stat-card__value">{{ completedCount }}</p>
+        <p class="stat-card__hint">уже закрыты</p>
+      </article>
+
+      <article class="stat-card">
+        <div class="stat-card__top">
+          <p class="stat-card__label">Высокий приоритет</p>
+          <span class="stat-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.9L12 16.52l-5.3 2.79 1.01-5.9-4.29-4.18 5.93-.86L12 3Z" />
+            </svg>
+          </span>
+        </div>
+        <p class="stat-card__value">{{ highPriorityCount }}</p>
+        <p class="stat-card__hint">важные задачи</p>
+      </article>
+    </section>
+
+    <section class="tasks-progress" aria-label="Прогресс выполнения">
+      <div class="tasks-progress__header">
+        <div>
+          <p class="tasks-progress__title">Прогресс</p>
+          <p class="tasks-progress__meta">{{ progressMeta }}</p>
+        </div>
+        <strong class="tasks-progress__percent">{{ progressPercent }}%</strong>
+      </div>
+      <div
+        class="tasks-progress__track"
+        role="progressbar"
+        [attr.aria-valuenow]="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span class="tasks-progress__bar" [style.width.%]="progressPercent"></span>
+      </div>
+    </section>
+  }
+
+  <section class="task-list tasks-panel" aria-labelledby="task-list-title" [attr.aria-busy]="isLoading">
+    <div class="tasks-panel__header">
+      <div class="tasks-list__title-block">
+        <h2 id="task-list-title">Список задач</h2>
+        <span class="count-label">{{ visibleTasks.length }} из {{ totalCount }}</span>
       </div>
 
-      <button
-        class="primary-button board-submit"
-        type="submit"
-        form="task-editor-form"
-        [disabled]="isSaving"
-      >
-        <img src="assets/sprites/plus-blue-pill.png" alt="" aria-hidden="true">
-        {{ isSaving ? 'Сохраняем...' : editingTaskId ? 'Сохранить' : 'Добавить задачу' }}
-      </button>
-    </header>
+      <div class="tasks-panel__toolbar">
+        <label class="tasks-search">
+          <span class="sr-only">Поиск задач</span>
+          <input
+            class="tasks-search__input"
+            type="search"
+            placeholder="Поиск задач..."
+            aria-label="Поиск задач"
+            [formControl]="searchControl"
+          >
+          @if (searchControl.value.trim()) {
+            <button class="tasks-search__clear" type="button" aria-label="Очистить поиск" (click)="clearSearch()">
+              ×
+            </button>
+          }
+        </label>
 
-    <div class="workspace">
-      <section class="task-list" aria-labelledby="task-list-title">
-        <div class="list-header tasks-list__header">
-          <div class="tasks-list__title-block">
-            <h2 id="task-list-title">Список задач</h2>
-            <span class="count-label">{{ filteredTasks.length }} из {{ totalCount }}</span>
-          </div>
+        <div class="filters tasks-filters" role="group" aria-label="Фильтр по статусу">
+          @for (filter of filters; track filter.value) {
+            <button
+              class="filter-button"
+              type="button"
+              [class.active]="activeFilter === filter.value"
+              [class.filter-button--active]="activeFilter === filter.value"
+              (click)="setFilter(filter.value)"
+            >
+              {{ filter.label }}
+            </button>
+          }
+        </div>
+      </div>
+    </div>
 
-          <div class="filters tasks-filters" role="group" aria-label="Фильтр по статусу">
-            @for (filter of filters; track filter.value) {
-              <button
-                class="filter-button"
-                type="button"
-                [class.active]="activeFilter === filter.value"
-                [class.filter-button--active]="activeFilter === filter.value"
-                (click)="setFilter(filter.value)"
-              >
-                {{ filter.label }}
-              </button>
-            }
+    @if (listErrorMessage) {
+      <div class="server-error list-error">
+        <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
+        <span>{{ listErrorMessage }}</span>
+      </div>
+    }
+
+    <div class="tasks-panel__body">
+      @if (isLoading) {
+        <div class="tasks tasks-skeleton-list" aria-hidden="true">
+          @for (item of skeletonItems; track item) {
+            <article class="task-skeleton">
+              <span class="skeleton task-skeleton__checkbox"></span>
+              <span class="task-skeleton__content">
+                <span class="skeleton task-skeleton__title"></span>
+                <span class="skeleton task-skeleton__description"></span>
+              </span>
+              <span class="skeleton task-skeleton__badge"></span>
+              <span class="skeleton task-skeleton__actions"></span>
+            </article>
+          }
+        </div>
+      } @else if (emptyState; as state) {
+        <div class="tasks-empty">
+          <img class="tasks-empty__image" [src]="state.image" [alt]="state.alt">
+          <div>
+            <h3 class="tasks-empty__title">{{ state.title }}</h3>
+            <p class="tasks-empty__text">{{ state.text }}</p>
+            <div class="tasks-empty__actions">
+              @if (state.kind === 'search') {
+                <button class="btn btn--primary" type="button" (click)="clearSearch()">Очистить поиск</button>
+                <button class="btn btn--secondary" type="button" (click)="setFilter('all')">Показать все</button>
+              } @else {
+                <button class="btn btn--primary" type="button" (click)="emptyStatePrimaryAction(state)">
+                  {{ emptyStatePrimaryLabel(state) }}
+                </button>
+              }
+            </div>
           </div>
         </div>
+      } @else {
+        <div class="tasks">
+          @for (task of visibleTasks; track trackByTaskId($index, task)) {
+            @if (isEditing(task)) {
+              <form
+                class="task-item task-card task-card--editing"
+                [formGroup]="editForm"
+                (ngSubmit)="saveInlineEdit(task)"
+              >
+                <label class="task-card__check inline-check" title="Выполнена">
+                  <input type="checkbox" formControlName="completed">
+                  <span aria-hidden="true"></span>
+                  <span class="sr-only">Выполнена</span>
+                </label>
 
-        @if (listErrorMessage) {
-          <div class="server-error list-error">
-            <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
-            <span>{{ listErrorMessage }}</span>
-          </div>
-        }
+                <div class="task-card__content inline-edit-fields">
+                  <label class="sr-only" for="edit-title-{{ task.id }}">Название</label>
+                  <input
+                    id="edit-title-{{ task.id }}"
+                    class="inline-input"
+                    type="text"
+                    formControlName="title"
+                    placeholder="Название задачи"
+                  >
+                  @if (editForm.controls.title.touched && editForm.controls.title.invalid) {
+                    <small class="form-error">Название обязательно.</small>
+                  }
 
-        @if (isLoading) {
-          <div class="empty-state compact-state">
-            <span class="loader" aria-hidden="true"></span>
-            <h3>Загрузка задач...</h3>
-          </div>
-        } @else if (!filteredTasks.length) {
-          <div class="empty-state">
-            <img src="assets/sprites/empty-checklist-sad.png" alt="Пустой список задач">
-            <h3>Задач пока нет</h3>
-            <p>Добавьте новую задачу или измените фильтр, чтобы увидеть список.</p>
-            <button class="secondary-button" type="submit" form="task-editor-form">
-              Добавить задачу
-            </button>
-          </div>
-        } @else {
-          <div class="tasks">
-            @for (task of filteredTasks; track trackByTaskId($index, task)) {
+                  <label class="sr-only" for="edit-description-{{ task.id }}">Описание</label>
+                  <textarea
+                    id="edit-description-{{ task.id }}"
+                    class="inline-textarea"
+                    rows="3"
+                    formControlName="description"
+                    placeholder="Описание задачи"
+                  ></textarea>
+                  @if (editForm.controls.description.touched && editForm.controls.description.invalid) {
+                    <small class="form-error">Описание обязательно.</small>
+                  }
+
+                  @if (editErrorMessage) {
+                    <small class="form-error">{{ editErrorMessage }}</small>
+                  }
+                </div>
+
+                <div class="task-card__meta">
+                  <div class="priority-control priority-control--compact" aria-label="Приоритет задачи">
+                    @for (priority of priorities; track priority.value) {
+                      <button
+                        type="button"
+                        class="priority-option"
+                        [class.priority-option--active]="editForm.controls.priority.value === priority.value"
+                        (click)="setEditPriority(priority.value)"
+                      >
+                        {{ priority.label }}
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                <div class="task-card__actions inline-edit-actions">
+                  <button class="btn btn--primary" type="submit" [disabled]="isSaving">Сохранить</button>
+                  <button class="btn btn--ghost" type="button" (click)="resetForm()">Отмена</button>
+                </div>
+              </form>
+            } @else {
               <article class="task-item task-card" [class.completed]="task.completed">
                 <div class="task-card__check">
                   <button
@@ -134,7 +284,10 @@
                 </div>
 
                 <div class="task-card__meta">
-                  <span class="status-pill task-status" [class.done]="task.completed">
+                  <span class="priority-badge" [ngClass]="priorityClass(taskPriority(task))">
+                    {{ priorityLabel(taskPriority(task)) }}
+                  </span>
+                  <span class="status-badge task-status" [class.done]="task.completed">
                     {{ task.completed ? 'Выполнена' : 'Активная' }}
                   </span>
                 </div>
@@ -142,94 +295,135 @@
                 <div class="task-actions task-card__actions">
                   <button
                     type="button"
-                    class="icon-button task-action edit-button"
+                    class="task-action task-action--edit"
+                    aria-label="Редактировать задачу"
                     title="Редактировать"
                     (click)="startEdit(task)"
                   >
-                    <img src="assets/sprites/edit-pencil-gray.png" alt="" aria-hidden="true">
-                    <span class="sr-only">Редактировать</span>
+                    <img src="assets/sprites/edit-pencil-gray.svg" alt="" aria-hidden="true">
                   </button>
                   <button
                     type="button"
-                    class="icon-button task-action danger-button"
+                    class="task-action task-action--danger"
+                    aria-label="Удалить задачу"
                     title="Удалить"
-                    (click)="deleteTask(task)"
+                    (click)="deleteTask(task, $event)"
                   >
-                    <img src="assets/sprites/trash-red.png" alt="" aria-hidden="true">
-                    <span class="sr-only">Удалить</span>
+                    <img src="assets/sprites/trash-red.svg" alt="" aria-hidden="true">
                   </button>
                 </div>
               </article>
             }
-          </div>
-        }
-      </section>
-
-      <aside class="task-side">
-        <form
-          id="task-editor-form"
-          class="task-form"
-          [formGroup]="taskForm"
-          (ngSubmit)="submitTask()"
-          novalidate
-        >
-          <div class="form-heading">
-            <div>
-              <span>Рабочая область</span>
-              <h2>{{ editingTaskId ? 'Редактирование' : 'Новая задача' }}</h2>
-            </div>
-            @if (editingTaskId) {
-              <button class="link-button" type="button" (click)="resetForm()">Отменить</button>
-            }
-          </div>
-
-          <label class="field">
-            <span>Название</span>
-            <input type="text" formControlName="title" placeholder="Например: Купить продукты">
-            @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
-              <small class="field-error">Название обязательно.</small>
-            }
-          </label>
-
-          <label class="field">
-            <span>Описание</span>
-            <textarea
-              rows="5"
-              formControlName="description"
-              placeholder="Добавьте детали задачи"
-            ></textarea>
-            @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
-              <small class="field-error">Описание обязательно.</small>
-            }
-          </label>
-
-          <label class="checkbox-row">
-            <input type="checkbox" formControlName="completed">
-            <span>Выполнена</span>
-          </label>
-
-          @if (activeFilter === 'completed' && filteredTasks.length > 0) {
-            <div class="success-note">
-              <img src="assets/sprites/success-character.png" alt="Завершенные задачи">
-              <p>Готовые задачи собраны здесь.</p>
-            </div>
           }
-
-          @if (formErrorMessage) {
-            <div class="server-error form-error">
-              <img src="assets/sprites/warning-character.png" alt="" aria-hidden="true">
-              <span>{{ formErrorMessage }}</span>
-            </div>
-          }
-
-          <div class="form-actions">
-            <button class="primary-button" type="submit" [disabled]="isSaving">
-              <img src="assets/sprites/plus-blue-pill.png" alt="" aria-hidden="true">
-              {{ isSaving ? 'Сохраняем...' : editingTaskId ? 'Сохранить' : 'Создать' }}
-            </button>
-          </div>
-        </form>
-      </aside>
+        </div>
+      }
     </div>
   </section>
-</main>
+</section>
+
+@if (isCreateModalOpen) {
+  <div class="modal-backdrop" (click)="closeCreateModal()">
+    <section
+      #createModalPanel
+      class="task-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-modal-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="task-modal__header">
+        <div>
+          <h2 id="task-modal-title" class="task-modal__title">Новая задача</h2>
+          <p class="task-modal__subtitle">Создайте задачу, задайте приоритет и статус.</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Закрыть окно" (click)="closeCreateModal()">×</button>
+      </header>
+
+      <form class="task-modal__body" [formGroup]="taskForm" (ngSubmit)="submitTask()" novalidate>
+        <div class="form-field">
+          <label for="task-title">Название</label>
+          <input
+            id="task-title"
+            type="text"
+            formControlName="title"
+            placeholder="Например: Купить продукты"
+          >
+          @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
+            <small class="form-error">Название обязательно.</small>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="task-description">Описание</label>
+          <textarea
+            id="task-description"
+            rows="5"
+            formControlName="description"
+            placeholder="Добавьте детали задачи"
+          ></textarea>
+          @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
+            <small class="form-error">Описание обязательно.</small>
+          }
+        </div>
+
+        <div class="form-field">
+          <span class="field-label">Приоритет</span>
+          <div class="priority-control" role="group" aria-label="Приоритет задачи">
+            @for (priority of priorities; track priority.value) {
+              <button
+                type="button"
+                class="priority-option"
+                [class.priority-option--active]="taskForm.controls.priority.value === priority.value"
+                (click)="setCreatePriority(priority.value)"
+              >
+                {{ priority.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <label class="modal-checkbox">
+          <input type="checkbox" formControlName="completed">
+          <span>Выполнена</span>
+        </label>
+
+        @if (formErrorMessage) {
+          <div class="form-error form-error--panel">{{ formErrorMessage }}</div>
+        }
+
+        <div class="task-modal__actions">
+          <button class="btn btn--secondary" type="button" (click)="closeCreateModal()">Отмена</button>
+          <button class="btn btn--primary" type="submit" [disabled]="isSaving">
+            {{ isSaving ? 'Создаем...' : 'Создать' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+}
+
+@if (taskPendingDelete) {
+  <div class="modal-backdrop" (click)="closeConfirmDialog()">
+    <section
+      #confirmModalPanel
+      class="confirm-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="confirm-dialog__header">
+        <span class="confirm-dialog__icon" aria-hidden="true">!</span>
+        <h2 id="confirm-dialog-title" class="confirm-dialog__title">Удалить задачу?</h2>
+        <p class="confirm-dialog__text">Это действие нельзя отменить. Задача будет удалена навсегда.</p>
+      </header>
+
+      <div class="confirm-dialog__actions">
+        <button class="btn btn--secondary" type="button" (click)="closeConfirmDialog()">Отмена</button>
+        <button class="btn btn--danger" type="button" [disabled]="isSaving" (click)="confirmDelete()">
+          {{ isSaving ? 'Удаляем...' : 'Удалить' }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

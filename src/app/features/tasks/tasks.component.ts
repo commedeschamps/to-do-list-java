@@ -1,12 +1,27 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
-import { finalize } from 'rxjs';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import Fuse from 'fuse.js';
+import { Subscription, debounceTime, distinctUntilChanged, finalize } from 'rxjs';
 
-import { AuthService } from '../../core/services/auth.service';
 import { TaskService } from '../../core/services/task.service';
-import { Task, TaskFilter } from '../../shared/models/task.model';
+import { Task, TaskFilter, TaskPriority } from '../../shared/models/task.model';
+import { ToastService } from '../../shared/ui/toast/toast.service';
+
+type SearchableTask = Task & {
+  completedLabel: string;
+  priorityLabel: string;
+};
+
+type EmptyStateKind = 'noTasks' | 'noActive' | 'noCompleted' | 'search';
+
+interface TasksEmptyState {
+  alt: string;
+  image: string;
+  kind: EmptyStateKind;
+  text: string;
+  title: string;
+}
 
 @Component({
   selector: 'app-tasks',
@@ -15,16 +30,30 @@ import { Task, TaskFilter } from '../../shared/models/task.model';
   templateUrl: './tasks.component.html',
   styleUrl: './tasks.component.scss'
 })
-export class TasksComponent implements OnInit {
+export class TasksComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly taskService = inject(TaskService);
-  private readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
+  private readonly toastService = inject(ToastService);
+  private createModalTrigger: HTMLElement | null = null;
+  private confirmModalTrigger: HTMLElement | null = null;
+
+  @ViewChild('createModalPanel') private createModalPanel?: ElementRef<HTMLElement>;
+  @ViewChild('confirmModalPanel') private confirmModalPanel?: ElementRef<HTMLElement>;
+
+  readonly searchControl = new FormControl('', { nonNullable: true });
 
   readonly taskForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
     description: ['', Validators.required],
-    completed: [false]
+    completed: [false],
+    priority: ['medium' as TaskPriority, Validators.required]
+  });
+
+  readonly editForm = this.fb.nonNullable.group({
+    title: ['', Validators.required],
+    description: ['', Validators.required],
+    completed: [false],
+    priority: ['medium' as TaskPriority, Validators.required]
   });
 
   readonly filters: Array<{ label: string; value: TaskFilter }> = [
@@ -33,32 +62,138 @@ export class TasksComponent implements OnInit {
     { label: 'Выполненные', value: 'completed' }
   ];
 
+  readonly priorities: Array<{ label: string; value: TaskPriority }> = [
+    { label: 'Низкий', value: 'low' },
+    { label: 'Средний', value: 'medium' },
+    { label: 'Высокий', value: 'high' }
+  ];
+
+  readonly skeletonItems = [0, 1, 2];
+  readonly statSkeletonItems = [0, 1, 2, 3];
+
+  private searchIndex: Fuse<SearchableTask> | null = null;
+  private searchIndexTasks: SearchableTask[] = [];
+  private readonly searchSubscription: Subscription;
+
   tasks: Task[] = [];
   activeFilter: TaskFilter = 'all';
   editingTaskId: number | null = null;
+  taskPendingDelete: Task | null = null;
   isLoading = false;
   isSaving = false;
+  isCreateModalOpen = false;
   formErrorMessage = '';
+  editErrorMessage = '';
   listErrorMessage = '';
+  searchQuery = '';
+
+  constructor() {
+    this.searchSubscription = this.searchControl.valueChanges
+      .pipe(debounceTime(220), distinctUntilChanged())
+      .subscribe((query) => {
+        this.searchQuery = query;
+      });
+  }
 
   ngOnInit(): void {
     this.loadTasks();
   }
 
+  ngOnDestroy(): void {
+    this.searchSubscription.unsubscribe();
+  }
+
   get filteredTasks(): Task[] {
-    if (this.activeFilter === 'active') {
-      return this.tasks.filter((task) => !task.completed);
+    return this.tasks.filter((task) => this.matchesActiveFilter(task));
+  }
+
+  get visibleTasks(): Task[] {
+    const query = this.normalizedSearchQuery;
+
+    if (!query || !this.searchIndex) {
+      return this.filteredTasks;
     }
 
-    if (this.activeFilter === 'completed') {
-      return this.tasks.filter((task) => task.completed);
-    }
-
-    return this.tasks;
+    return this.searchIndex
+      .search(query)
+      .map((result) => result.item)
+      .filter((task) => this.matchesActiveFilter(task));
   }
 
   get totalCount(): number {
     return this.tasks.length;
+  }
+
+  get activeCount(): number {
+    return this.tasks.filter((task) => !task.completed).length;
+  }
+
+  get completedCount(): number {
+    return this.tasks.filter((task) => task.completed).length;
+  }
+
+  get highPriorityCount(): number {
+    return this.tasks.filter((task) => this.taskPriority(task) === 'high').length;
+  }
+
+  get progressPercent(): number {
+    if (!this.totalCount) {
+      return 0;
+    }
+
+    return Math.round((this.completedCount / this.totalCount) * 100);
+  }
+
+  get progressMeta(): string {
+    return `${this.completedCount} из ${this.totalCount} задач выполнено`;
+  }
+
+  get emptyState(): TasksEmptyState | null {
+    if (this.isLoading || this.visibleTasks.length) {
+      return null;
+    }
+
+    if (this.normalizedSearchQuery) {
+      return {
+        alt: 'Ничего не найдено',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'search',
+        text: 'Попробуйте изменить поисковый запрос или сбросить фильтр.',
+        title: 'Ничего не найдено'
+      };
+    }
+
+    if (!this.totalCount) {
+      return {
+        alt: 'Пустой список задач',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'noTasks',
+        text: 'Добавьте первую задачу, чтобы начать работу.',
+        title: 'Задач пока нет'
+      };
+    }
+
+    if (this.activeFilter === 'active') {
+      return {
+        alt: 'Все задачи выполнены',
+        image: 'assets/sprites/success-character.png',
+        kind: 'noActive',
+        text: 'Все задачи выполнены. Отличная работа.',
+        title: 'Активных задач нет'
+      };
+    }
+
+    if (this.activeFilter === 'completed') {
+      return {
+        alt: 'Нет выполненных задач',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'noCompleted',
+        text: 'Завершите задачу, чтобы она появилась здесь.',
+        title: 'Выполненных задач нет'
+      };
+    }
+
+    return null;
   }
 
   loadTasks(): void {
@@ -70,12 +205,33 @@ export class TasksComponent implements OnInit {
       .pipe(finalize(() => (this.isLoading = false)))
       .subscribe({
         next: (tasks) => {
-          this.tasks = tasks;
+          this.setTasks(tasks);
         },
         error: () => {
           this.listErrorMessage = 'Не удалось загрузить задачи.';
+          this.toastService.show('Не удалось загрузить задачи', 'error');
         }
       });
+  }
+
+  openCreateModal(event?: Event): void {
+    this.createModalTrigger = this.eventTarget(event);
+    this.formErrorMessage = '';
+    this.taskForm.reset({
+      title: '',
+      description: '',
+      completed: false,
+      priority: 'medium'
+    });
+    this.isCreateModalOpen = true;
+    window.setTimeout(() => this.focusFirstControl(this.createModalPanel), 0);
+  }
+
+  closeCreateModal(): void {
+    this.isCreateModalOpen = false;
+    this.formErrorMessage = '';
+    this.createModalTrigger?.focus();
+    this.createModalTrigger = null;
   }
 
   submitTask(): void {
@@ -89,53 +245,74 @@ export class TasksComponent implements OnInit {
     const formValue = this.taskForm.getRawValue();
     this.isSaving = true;
 
-    if (this.editingTaskId) {
-      this.taskService
-        .updateTask(this.editingTaskId, formValue)
-        .pipe(finalize(() => (this.isSaving = false)))
-        .subscribe({
-          next: (updatedTask) => {
-            this.tasks = this.tasks.map((task) =>
-              task.id === updatedTask.id ? updatedTask : task
-            );
-            this.resetForm();
-          },
-          error: () => {
-            this.formErrorMessage = 'Не удалось обновить задачу.';
-          }
-        });
-      return;
-    }
-
     this.taskService
       .createTask(formValue)
       .pipe(finalize(() => (this.isSaving = false)))
       .subscribe({
         next: (createdTask) => {
-          this.tasks = [createdTask, ...this.tasks];
+          this.setTasks([createdTask, ...this.tasks]);
+          this.closeCreateModal();
           this.resetForm();
+          this.toastService.show('Задача создана', 'success');
         },
         error: () => {
           this.formErrorMessage = 'Не удалось создать задачу.';
+          this.toastService.show('Не удалось создать задачу', 'error');
         }
       });
   }
 
   startEdit(task: Task): void {
     this.editingTaskId = task.id;
-    this.taskForm.setValue({
+    this.editErrorMessage = '';
+    this.editForm.setValue({
       title: task.title,
       description: task.description,
-      completed: task.completed
+      completed: task.completed,
+      priority: this.taskPriority(task)
     });
+  }
+
+  saveInlineEdit(task: Task): void {
+    this.editErrorMessage = '';
+
+    if (this.editForm.invalid) {
+      this.editForm.markAllAsTouched();
+      return;
+    }
+
+    this.isSaving = true;
+
+    this.taskService
+      .updateTask(task.id, this.editForm.getRawValue())
+      .pipe(finalize(() => (this.isSaving = false)))
+      .subscribe({
+        next: (updatedTask) => {
+          this.setTasks(this.tasks.map((item) => (item.id === updatedTask.id ? updatedTask : item)));
+          this.resetForm();
+          this.toastService.show('Задача обновлена', 'success');
+        },
+        error: () => {
+          this.editErrorMessage = 'Не удалось обновить задачу.';
+          this.toastService.show('Не удалось обновить задачу', 'error');
+        }
+      });
   }
 
   resetForm(): void {
     this.editingTaskId = null;
+    this.editErrorMessage = '';
     this.taskForm.reset({
       title: '',
       description: '',
-      completed: false
+      completed: false,
+      priority: 'medium'
+    });
+    this.editForm.reset({
+      title: '',
+      description: '',
+      completed: false,
+      priority: 'medium'
     });
   }
 
@@ -143,52 +320,258 @@ export class TasksComponent implements OnInit {
     this.activeFilter = filter;
   }
 
+  clearSearch(): void {
+    this.searchControl.setValue('');
+  }
+
   toggleCompleted(task: Task): void {
     const nextTask = {
       title: task.title,
       description: task.description,
-      completed: !task.completed
+      completed: !task.completed,
+      priority: this.taskPriority(task)
     };
 
     this.taskService.updateTask(task.id, nextTask).subscribe({
       next: (updatedTask) => {
-        this.tasks = this.tasks.map((item) =>
-          item.id === updatedTask.id ? updatedTask : item
-        );
+        this.setTasks(this.tasks.map((item) => (item.id === updatedTask.id ? updatedTask : item)));
+        this.toastService.show('Статус изменён', 'info');
       },
       error: () => {
         this.listErrorMessage = 'Не удалось изменить статус задачи.';
+        this.toastService.show('Не удалось обновить задачу', 'error');
       }
     });
   }
 
-  deleteTask(task: Task): void {
-    const confirmed = window.confirm(`Удалить задачу "${task.title}"?`);
+  deleteTask(task: Task, event?: Event): void {
+    this.confirmModalTrigger = this.eventTarget(event);
+    this.taskPendingDelete = task;
+    window.setTimeout(() => this.focusFirstControl(this.confirmModalPanel), 0);
+  }
 
-    if (!confirmed) {
+  confirmDelete(): void {
+    if (!this.taskPendingDelete) {
       return;
     }
 
-    this.taskService.deleteTask(task.id).subscribe({
+    const task = this.taskPendingDelete;
+    this.isSaving = true;
+
+    this.taskService.deleteTask(task.id).pipe(finalize(() => (this.isSaving = false))).subscribe({
       next: () => {
-        this.tasks = this.tasks.filter((item) => item.id !== task.id);
+        this.setTasks(this.tasks.filter((item) => item.id !== task.id));
 
         if (this.editingTaskId === task.id) {
           this.resetForm();
         }
+
+        this.closeConfirmDialog();
+        this.toastService.show('Задача удалена', 'success');
       },
       error: () => {
         this.listErrorMessage = 'Не удалось удалить задачу.';
+        this.toastService.show('Не удалось удалить задачу', 'error');
       }
     });
   }
 
-  logout(): void {
-    this.authService.logout();
-    void this.router.navigateByUrl('/login');
+  closeConfirmDialog(): void {
+    this.taskPendingDelete = null;
+    this.confirmModalTrigger?.focus();
+    this.confirmModalTrigger = null;
   }
 
   trackByTaskId(_index: number, task: Task): number {
     return task.id;
+  }
+
+  isEditing(task: Task): boolean {
+    return this.editingTaskId === task.id;
+  }
+
+  setCreatePriority(priority: TaskPriority): void {
+    this.taskForm.controls.priority.setValue(priority);
+  }
+
+  setEditPriority(priority: TaskPriority): void {
+    this.editForm.controls.priority.setValue(priority);
+  }
+
+  taskPriority(task: Task): TaskPriority {
+    return this.normalizePriority(task.priority);
+  }
+
+  priorityLabel(priority: TaskPriority): string {
+    if (priority === 'low') {
+      return 'Низкий';
+    }
+
+    if (priority === 'high') {
+      return 'Высокий';
+    }
+
+    return 'Средний';
+  }
+
+  priorityClass(priority: TaskPriority): string {
+    return `priority-badge--${priority}`;
+  }
+
+  emptyStatePrimaryAction(state: TasksEmptyState): void {
+    if (state.kind === 'noTasks') {
+      this.openCreateModal();
+      return;
+    }
+
+    if (state.kind === 'noActive' || state.kind === 'search') {
+      this.setFilter('all');
+      return;
+    }
+
+    this.setFilter('active');
+  }
+
+  emptyStatePrimaryLabel(state: TasksEmptyState): string {
+    if (state.kind === 'noTasks') {
+      return 'Добавить задачу';
+    }
+
+    if (state.kind === 'noCompleted') {
+      return 'Показать активные';
+    }
+
+    return 'Показать все задачи';
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  handleDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.taskPendingDelete) {
+        this.closeConfirmDialog();
+        return;
+      }
+
+      if (this.isCreateModalOpen) {
+        this.closeCreateModal();
+        return;
+      }
+
+      if (this.editingTaskId) {
+        this.resetForm();
+      }
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    if (this.taskPendingDelete) {
+      this.trapFocus(event, this.confirmModalPanel);
+      return;
+    }
+
+    if (this.isCreateModalOpen) {
+      this.trapFocus(event, this.createModalPanel);
+    }
+  }
+
+  private withNormalizedPriority(task: Task): Task {
+    return {
+      ...task,
+      priority: this.normalizePriority(task.priority)
+    };
+  }
+
+  private setTasks(tasks: Task[]): void {
+    this.tasks = tasks.map((task) => this.withNormalizedPriority(task));
+    this.rebuildSearchIndex();
+  }
+
+  private rebuildSearchIndex(): void {
+    this.searchIndexTasks = this.tasks.map((task) => ({
+      ...task,
+      completedLabel: task.completed ? 'Выполнена completed done завершена' : 'Активная active open',
+      priorityLabel: `${this.priorityLabel(this.taskPriority(task))} ${this.taskPriority(task)}`
+    }));
+    this.searchIndex = new Fuse(this.searchIndexTasks, {
+      keys: [
+        { name: 'title', weight: 0.5 },
+        { name: 'description', weight: 0.23 },
+        { name: 'priority', weight: 0.08 },
+        { name: 'priorityLabel', weight: 0.11 },
+        { name: 'completedLabel', weight: 0.08 }
+      ],
+      threshold: 0.35,
+      ignoreLocation: true,
+      includeScore: true
+    });
+  }
+
+  private matchesActiveFilter(task: Task): boolean {
+    if (this.activeFilter === 'active') {
+      return !task.completed;
+    }
+
+    if (this.activeFilter === 'completed') {
+      return task.completed;
+    }
+
+    return true;
+  }
+
+  private get normalizedSearchQuery(): string {
+    return this.searchQuery.trim();
+  }
+
+  private normalizePriority(priority: TaskPriority | string | undefined): TaskPriority {
+    if (priority === 'low' || priority === 'medium' || priority === 'high') {
+      return priority;
+    }
+
+    return 'medium';
+  }
+
+  private eventTarget(event?: Event): HTMLElement | null {
+    return event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  }
+
+  private focusFirstControl(panel?: ElementRef<HTMLElement>): void {
+    const focusable = this.focusableElements(panel);
+    focusable[0]?.focus();
+  }
+
+  private trapFocus(event: KeyboardEvent, panel?: ElementRef<HTMLElement>): void {
+    const focusable = this.focusableElements(panel);
+
+    if (!focusable.length) {
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+      return;
+    }
+
+    if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  private focusableElements(panel?: ElementRef<HTMLElement>): HTMLElement[] {
+    if (!panel) {
+      return [];
+    }
+
+    return Array.from(
+      panel.nativeElement.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((element) => !element.hasAttribute('disabled'));
   }
 }
