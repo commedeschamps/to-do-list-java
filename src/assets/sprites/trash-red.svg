@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Удалить">
+  <path d="M22 14h20" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/>
+  <path d="M27 14V9h10v5" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M16 21h32" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/>
+  <path d="M20 21l3 33h18l3-33" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M29 29v17M35 29v17" fill="none" stroke="#ef4444" stroke-width="5" stroke-linecap="round"/>
+</svg>
