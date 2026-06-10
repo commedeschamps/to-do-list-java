@@ -17,19 +17,24 @@ export class TaskService {
   }
 
   createTask(payload: TaskPayload): Observable<Task> {
-    return this.http.post<Task>(this.apiUrl, {
-      title: payload.title,
-      description: payload.description,
-      completed: payload.completed ?? false,
-      priority: payload.priority ?? 'medium'
-    });
+    return this.http.post<Task>(this.apiUrl, this.toRequestPayload(payload));
   }
 
-  updateTask(id: number, payload: Required<TaskPayload>): Observable<Task> {
-    return this.http.put<Task>(`${this.apiUrl}/${id}`, payload);
+  updateTask(id: number, payload: TaskPayload): Observable<Task> {
+    return this.http.put<Task>(`${this.apiUrl}/${id}`, this.toRequestPayload(payload));
   }
 
   deleteTask(id: number): Observable<string> {
     return this.http.delete(`${this.apiUrl}/${id}`, { responseType: 'text' });
+  }
+
+  private toRequestPayload(payload: TaskPayload): Required<TaskPayload> {
+    return {
+      title: payload.title,
+      description: payload.description,
+      completed: payload.completed ?? false,
+      priority: payload.priority ?? 'medium',
+      dueDate: payload.dueDate || null
+    };
   }
 }

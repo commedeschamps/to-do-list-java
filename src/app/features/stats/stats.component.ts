@@ -1,22 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
+import { ChartData, ChartOptions } from 'chart.js';
+import { BaseChartDirective } from 'ng2-charts';
 import { finalize } from 'rxjs';
 
 import { TaskService } from '../../core/services/task.service';
 import { Task, TaskPriority } from '../../shared/models/task.model';
 import { ToastService } from '../../shared/ui/toast/toast.service';
 
-interface PriorityMetric {
-  count: number;
-  label: string;
-  percent: number;
-  value: TaskPriority;
-}
-
 @Component({
   selector: 'app-stats',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, BaseChartDirective],
   templateUrl: './stats.component.html',
   styleUrl: './stats.component.scss'
 })
@@ -27,6 +22,85 @@ export class StatsComponent implements OnInit {
   tasks: Task[] = [];
   isLoading = false;
   listErrorMessage = '';
+
+  readonly doughnutOptions: ChartOptions<'doughnut'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '64%',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          boxWidth: 12,
+          color: '#a9b0c4',
+          font: {
+            family: 'Inter, system-ui, sans-serif',
+            weight: 700
+          }
+        }
+      }
+    }
+  };
+
+  readonly barOptions: ChartOptions<'bar'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.06)'
+        },
+        ticks: {
+          color: '#a9b0c4'
+        }
+      },
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(255, 255, 255, 0.06)'
+        },
+        ticks: {
+          color: '#a9b0c4',
+          precision: 0
+        }
+      }
+    }
+  };
+
+  readonly lineOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          color: 'rgba(255, 255, 255, 0.05)'
+        },
+        ticks: {
+          color: '#a9b0c4'
+        }
+      },
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(255, 255, 255, 0.06)'
+        },
+        ticks: {
+          color: '#a9b0c4',
+          precision: 0
+        }
+      }
+    }
+  };
 
   ngOnInit(): void {
     this.loadTasks();
@@ -60,12 +134,57 @@ export class StatsComponent implements OnInit {
     return `${this.completedCount} из ${this.totalCount} задач выполнено`;
   }
 
-  get priorityMetrics(): PriorityMetric[] {
-    return [
-      this.priorityMetric('high', 'Высокий'),
-      this.priorityMetric('medium', 'Средний'),
-      this.priorityMetric('low', 'Низкий')
-    ];
+  get statusChartData(): ChartData<'doughnut'> {
+    return {
+      labels: ['Активные', 'Выполненные'],
+      datasets: [
+        {
+          data: [this.activeCount, this.completedCount],
+          backgroundColor: ['#3b82f6', '#22c55e'],
+          borderColor: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.12)'],
+          borderWidth: 1
+        }
+      ]
+    };
+  }
+
+  get priorityChartData(): ChartData<'bar'> {
+    return {
+      labels: ['Высокий', 'Средний', 'Низкий'],
+      datasets: [
+        {
+          data: [this.countByPriority('high'), this.countByPriority('medium'), this.countByPriority('low')],
+          backgroundColor: ['#f59e0b', '#0f766e', '#3b82f6'],
+          borderRadius: 8,
+          maxBarThickness: 42
+        }
+      ]
+    };
+  }
+
+  get completedWeeklyChartData(): ChartData<'line'> {
+    const days = this.lastSevenDays();
+
+    return {
+      labels: days.map((day) =>
+        new Intl.DateTimeFormat('ru-RU', {
+          day: 'numeric',
+          month: 'short'
+        }).format(day)
+      ),
+      datasets: [
+        {
+          data: days.map((day) => this.completedCountForDay(day)),
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34, 197, 94, 0.14)',
+          fill: true,
+          pointBackgroundColor: '#86efac',
+          pointBorderColor: '#14532d',
+          pointRadius: 4,
+          tension: 0.35
+        }
+      ]
+    };
   }
 
   loadTasks(): void {
@@ -89,27 +208,38 @@ export class StatsComponent implements OnInit {
       });
   }
 
-  trackByPriority(_index: number, metric: PriorityMetric): TaskPriority {
-    return metric.value;
-  }
-
-  priorityClass(priority: TaskPriority): string {
-    return `priority-bar--${priority}`;
-  }
-
-  private priorityMetric(value: TaskPriority, label: string): PriorityMetric {
-    const count = this.countByPriority(value);
-
-    return {
-      count,
-      label,
-      percent: this.totalCount ? Math.round((count / this.totalCount) * 100) : 0,
-      value
-    };
-  }
-
   private countByPriority(priority: TaskPriority): number {
     return this.tasks.filter((task) => task.priority === priority).length;
+  }
+
+  private completedCountForDay(day: Date): number {
+    const dayKey = this.dateKey(day);
+
+    return this.tasks.filter((task) => {
+      if (!task.completedAt) {
+        return false;
+      }
+
+      return this.dateKey(new Date(task.completedAt)) === dayKey;
+    }).length;
+  }
+
+  private lastSevenDays(): Date[] {
+    const today = new Date();
+    const days: Date[] = [];
+
+    for (let index = 6; index >= 0; index--) {
+      days.push(new Date(today.getFullYear(), today.getMonth(), today.getDate() - index));
+    }
+
+    return days;
+  }
+
+  private dateKey(date: Date): string {
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${date.getFullYear()}-${month}-${day}`;
   }
 
   private normalizePriority(priority: TaskPriority | string | undefined): TaskPriority {

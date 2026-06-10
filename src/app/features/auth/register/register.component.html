@@ -17,7 +17,11 @@
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <label class="field">
           <span>Имя пользователя</span>
-          <span class="input-shell input-shell-user">
+          <span
+            class="input-shell input-shell-user"
+            [class.input-shell--error]="isFieldInvalid(form.controls.username)"
+            [class.input-shell--success]="isFieldValid(form.controls.username)"
+          >
             <input
               type="text"
               formControlName="username"
@@ -25,23 +29,88 @@
               placeholder="Введите имя пользователя"
             >
           </span>
-          @if (form.controls.username.touched && form.controls.username.invalid) {
-            <small class="field-error">Имя пользователя обязательно.</small>
+          <small class="field-hint">От 3 до 30 символов.</small>
+          @if (usernameErrorMessage) {
+            <small class="field-error">{{ usernameErrorMessage }}</small>
           }
         </label>
 
         <label class="field">
           <span>Пароль</span>
-          <span class="input-shell input-shell-lock">
+          <span
+            class="input-shell input-shell-lock input-shell-password"
+            [class.input-shell--error]="isFieldInvalid(form.controls.password)"
+            [class.input-shell--success]="isFieldValid(form.controls.password)"
+          >
             <input
-              type="password"
+              [type]="showPassword ? 'text' : 'password'"
               formControlName="password"
               autocomplete="new-password"
               placeholder="Введите пароль"
             >
+            <button
+              class="password-toggle"
+              type="button"
+              [attr.aria-label]="showPassword ? 'Скрыть пароль' : 'Показать пароль'"
+              (click)="togglePasswordVisibility()"
+            >
+              @if (showPassword) {
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 3l18 18" />
+                  <path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58" />
+                  <path d="M9.88 4.24A9.5 9.5 0 0 1 12 4c5.5 0 9 5 9 8a8.2 8.2 0 0 1-1.22 3.72" />
+                  <path d="M6.61 6.61C4.35 8.07 3 10.34 3 12c0 3 3.5 8 9 8a9.6 9.6 0 0 0 4.35-1.03" />
+                </svg>
+              } @else {
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                </svg>
+              }
+            </button>
           </span>
-          @if (form.controls.password.touched && form.controls.password.invalid) {
-            <small class="field-error">Пароль обязателен.</small>
+          <small class="field-hint">Минимум 6 символов.</small>
+          @if (passwordErrorMessage) {
+            <small class="field-error">{{ passwordErrorMessage }}</small>
+          }
+        </label>
+
+        <label class="field">
+          <span>Подтвердите пароль</span>
+          <span
+            class="input-shell input-shell-lock input-shell-password"
+            [class.input-shell--error]="isConfirmPasswordInvalid()"
+            [class.input-shell--success]="isConfirmPasswordValid()"
+          >
+            <input
+              [type]="showConfirmPassword ? 'text' : 'password'"
+              formControlName="confirmPassword"
+              autocomplete="new-password"
+              placeholder="Повторите пароль"
+            >
+            <button
+              class="password-toggle"
+              type="button"
+              [attr.aria-label]="showConfirmPassword ? 'Скрыть пароль' : 'Показать пароль'"
+              (click)="toggleConfirmPasswordVisibility()"
+            >
+              @if (showConfirmPassword) {
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M3 3l18 18" />
+                  <path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58" />
+                  <path d="M9.88 4.24A9.5 9.5 0 0 1 12 4c5.5 0 9 5 9 8a8.2 8.2 0 0 1-1.22 3.72" />
+                  <path d="M6.61 6.61C4.35 8.07 3 10.34 3 12c0 3 3.5 8 9 8a9.6 9.6 0 0 0 4.35-1.03" />
+                </svg>
+              } @else {
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                </svg>
+              }
+            </button>
+          </span>
+          @if (confirmPasswordErrorMessage) {
+            <small class="field-error">{{ confirmPasswordErrorMessage }}</small>
           }
         </label>
 
@@ -52,9 +121,9 @@
           </div>
         }
 
-        <button class="primary-button" type="submit" [disabled]="isSubmitting">
+        <button class="primary-button" type="submit" [disabled]="form.invalid || isSubmitting">
           <span aria-hidden="true">→</span>
-          {{ isSubmitting ? 'Создаем...' : 'Зарегистрироваться' }}
+          {{ isSubmitting ? 'Создаем аккаунт...' : 'Зарегистрироваться' }}
         </button>
       </form>
 

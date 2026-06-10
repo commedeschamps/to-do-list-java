@@ -1,0 +1,134 @@
+<section class="tasks-page calendar-page">
+  <section class="tasks-hero">
+    <div>
+      <p class="eyebrow">Календарь</p>
+      <h2>План задач</h2>
+      <p>Смотрите задачи по датам, создавайте новые дедлайны и открывайте карточки прямо из календаря.</p>
+    </div>
+
+    <button class="btn btn--primary tasks-hero__action" type="button" (click)="openCreateModal()">
+      <span class="btn__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      </span>
+      <span>Добавить задачу</span>
+    </button>
+  </section>
+
+  @if (listErrorMessage) {
+    <div class="server-error list-error">{{ listErrorMessage }}</div>
+  }
+
+  <section class="calendar-shell" [attr.aria-busy]="isLoading">
+    <div class="calendar-shell__header">
+      <div>
+        <h2>Календарь задач</h2>
+        <p>{{ calendarTaskCount }} задач с дедлайном</p>
+      </div>
+    </div>
+
+    @if (isLoading) {
+      <div class="calendar-loading" aria-hidden="true">
+        <span class="skeleton calendar-loading__toolbar"></span>
+        <span class="skeleton calendar-loading__grid"></span>
+      </div>
+    } @else {
+      <full-calendar [options]="calendarOptions" />
+
+      @if (!calendarTaskCount) {
+        <div class="calendar-empty">
+          <img src="assets/sprites/empty-checklist-sad.png" alt="Нет задач с датой">
+          <div>
+            <h3>В календаре пока пусто</h3>
+            <p>Добавьте дедлайн к задаче или создайте новую задачу из календаря.</p>
+          </div>
+        </div>
+      }
+    }
+  </section>
+</section>
+
+@if (isModalOpen) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <section
+      class="task-modal calendar-task-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="calendar-task-modal-title"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="task-modal__header">
+        <div>
+          <h2 id="calendar-task-modal-title" class="task-modal__title">{{ modalTitle }}</h2>
+          <p class="task-modal__subtitle">{{ modalSubtitle }}</p>
+        </div>
+        <button class="modal-close" type="button" aria-label="Закрыть окно" (click)="closeModal()">×</button>
+      </header>
+
+      <form class="task-modal__body" [formGroup]="taskForm" (ngSubmit)="submitTask()" novalidate>
+        <div class="form-field">
+          <label for="calendar-task-title">Название</label>
+          <input id="calendar-task-title" type="text" formControlName="title" placeholder="Например: Подготовить отчет">
+          @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
+            <small class="form-error">Название обязательно.</small>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="calendar-task-description">Описание</label>
+          <textarea
+            id="calendar-task-description"
+            rows="4"
+            formControlName="description"
+            placeholder="Добавьте детали задачи"
+          ></textarea>
+          @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
+            <small class="form-error">Описание обязательно.</small>
+          }
+        </div>
+
+        <div class="form-field">
+          <label for="calendar-task-due-date">Дедлайн</label>
+          <input id="calendar-task-due-date" type="date" formControlName="dueDate">
+          @if (taskForm.controls.dueDate.touched && taskForm.controls.dueDate.invalid) {
+            <small class="form-error">Укажите дату.</small>
+          }
+        </div>
+
+        <div class="form-field">
+          <span class="field-label">Приоритет</span>
+          <div class="priority-control" role="group" aria-label="Приоритет задачи">
+            @for (priority of priorities; track priority.value) {
+              <button
+                type="button"
+                class="priority-option"
+                [class.priority-option--active]="taskForm.controls.priority.value === priority.value"
+                (click)="setPriority(priority.value)"
+              >
+                {{ priority.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <label class="modal-checkbox">
+          <input type="checkbox" formControlName="completed">
+          <span>Выполнена</span>
+        </label>
+
+        @if (formErrorMessage) {
+          <div class="form-error form-error--panel">{{ formErrorMessage }}</div>
+        }
+
+        <div class="task-modal__actions">
+          <button class="btn btn--secondary" type="button" (click)="closeModal()">Отмена</button>
+          <button class="btn btn--primary" type="submit" [disabled]="isSaving">
+            {{ isSaving ? 'Сохраняем...' : 'Сохранить' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+}

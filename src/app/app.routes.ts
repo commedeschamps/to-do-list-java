@@ -34,6 +34,11 @@ export const routes: Routes = [
           import('./features/today/today.component').then((m) => m.TodayComponent)
       },
       {
+        path: 'calendar',
+        loadComponent: () =>
+          import('./features/calendar/calendar.component').then((m) => m.CalendarComponent)
+      },
+      {
         path: 'priorities',
         loadComponent: () =>
           import('./features/priorities/priorities.component').then((m) => m.PrioritiesComponent)

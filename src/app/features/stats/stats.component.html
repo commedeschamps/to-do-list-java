@@ -64,28 +64,36 @@
       </div>
     </section>
 
-    <section class="tasks-panel" aria-labelledby="priority-distribution-title">
-      <div class="tasks-panel__header">
-        <div class="tasks-list__title-block">
-          <h2 id="priority-distribution-title">Распределение по приоритетам</h2>
-          <span class="count-label">Задачи по уровню важности.</span>
+    <section class="stats-charts" aria-label="Графики задач">
+      <article class="chart-card">
+        <header class="chart-card__header">
+          <h2>Статус задач</h2>
+          <p>Активные и выполненные задачи.</p>
+        </header>
+        <div class="chart-card__body">
+          <canvas baseChart [type]="'doughnut'" [data]="statusChartData" [options]="doughnutOptions"></canvas>
         </div>
-      </div>
-      <div class="tasks-panel__body">
-        <div class="priority-bars">
-          @for (metric of priorityMetrics; track trackByPriority($index, metric)) {
-            <div class="priority-bar">
-              <div class="priority-bar__header">
-                <span>{{ metric.label }}</span>
-                <strong>{{ metric.count }} / {{ metric.percent }}%</strong>
-              </div>
-              <div class="priority-bar__track" aria-hidden="true">
-                <span class="priority-bar__value" [ngClass]="priorityClass(metric.value)" [style.width.%]="metric.percent"></span>
-              </div>
-            </div>
-          }
+      </article>
+
+      <article class="chart-card">
+        <header class="chart-card__header">
+          <h2>Распределение по приоритетам</h2>
+          <p>Задачи по уровню важности.</p>
+        </header>
+        <div class="chart-card__body">
+          <canvas baseChart [type]="'bar'" [data]="priorityChartData" [options]="barOptions"></canvas>
         </div>
-      </div>
+      </article>
+
+      <article class="chart-card chart-card--wide">
+        <header class="chart-card__header">
+          <h2>Выполнено за 7 дней</h2>
+          <p>Сколько задач закрывалось по дням.</p>
+        </header>
+        <div class="chart-card__body chart-card__body--wide">
+          <canvas baseChart [type]="'line'" [data]="completedWeeklyChartData" [options]="lineOptions"></canvas>
+        </div>
+      </article>
     </section>
   }
 </section>

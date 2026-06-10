@@ -65,7 +65,8 @@ export class TodayComponent implements OnInit {
         title: task.title,
         description: task.description,
         completed: !task.completed,
-        priority: this.taskPriority(task)
+        priority: this.taskPriority(task),
+        dueDate: task.dueDate ?? null
       })
       .subscribe({
         next: (updatedTask) => {

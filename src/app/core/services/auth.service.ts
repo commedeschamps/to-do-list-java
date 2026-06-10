@@ -1,28 +1,44 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, tap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { AuthCredentials } from '../../shared/models/auth.model';
+import { AuthCredentials, AuthResponse, CurrentUser } from '../../shared/models/auth.model';
+import { UserPreferencesService } from './user-preferences.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly preferencesService = inject(UserPreferencesService);
   private readonly apiUrl = `${environment.apiUrl}/auth`;
   private readonly tokenKey = 'todo_jwt_token';
+  private readonly currentUserKey = 'todo_current_user';
+  private readonly currentUserSubject = new BehaviorSubject<CurrentUser | null>(this.readStoredCurrentUser());
 
-  register(credentials: AuthCredentials): Observable<string> {
-    return this.http.post(`${this.apiUrl}/register`, credentials, {
-      responseType: 'text'
-    });
+  readonly currentUser$ = this.currentUserSubject.asObservable();
+
+  constructor() {
+    this.preferencesService.useUser(this.currentUserSubject.value?.username ?? this.getUsername());
   }
 
-  login(credentials: AuthCredentials): Observable<string> {
+  register(credentials: AuthCredentials): Observable<AuthResponse> {
     return this.http
-      .post(`${this.apiUrl}/login`, credentials, { responseType: 'text' })
-      .pipe(tap((token) => this.saveToken(token)));
+      .post<AuthResponse>(`${this.apiUrl}/register`, credentials)
+      .pipe(tap((response) => this.saveSession(response)));
+  }
+
+  login(credentials: AuthCredentials): Observable<AuthResponse> {
+    return this.http
+      .post<AuthResponse>(`${this.apiUrl}/login`, credentials)
+      .pipe(tap((response) => this.saveSession(response)));
+  }
+
+  refreshCurrentUser(): Observable<CurrentUser> {
+    return this.http
+      .get<CurrentUser>(`${this.apiUrl}/me`)
+      .pipe(tap((user) => this.saveCurrentUser(user)));
   }
 
   saveToken(token: string): void {
@@ -34,6 +50,12 @@ export class AuthService {
   }
 
   getUsername(): string | null {
+    const currentUser = this.getCurrentUser();
+
+    if (currentUser) {
+      return currentUser.username;
+    }
+
     const token = this.getToken();
 
     if (!token) {
@@ -43,12 +65,19 @@ export class AuthService {
     return this.decodeJwtSubject(token);
   }
 
+  getCurrentUser(): CurrentUser | null {
+    return this.currentUserSubject.value;
+  }
+
   isAuthenticated(): boolean {
     return Boolean(this.getToken());
   }
 
   logout(): void {
     localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.currentUserKey);
+    this.currentUserSubject.next(null);
+    this.preferencesService.useUser(null);
   }
 
   getRegisterErrorMessage(error: unknown): string {
@@ -60,15 +89,15 @@ export class AuthService {
       return 'Не удалось подключиться к серверу. Попробуйте позже.';
     }
 
-    const message = typeof error.error === 'string' ? error.error : '';
+    if (error.status === 200) {
+      return 'Аккаунт создан, но автоматический вход не сработал. Войдите вручную.';
+    }
+
+    const message = this.extractErrorMessage(error);
     const normalizedMessage = message.toLowerCase();
 
     if (error.status === 409 || normalizedMessage.includes('пользовател')) {
       return 'Имя пользователя уже занято';
-    }
-
-    if (normalizedMessage.includes('email')) {
-      return 'Email уже используется';
     }
 
     if (normalizedMessage.includes('пароль')) {
@@ -80,6 +109,86 @@ export class AuthService {
     }
 
     return message || 'Проверьте обязательные поля';
+  }
+
+  getLoginErrorMessage(error: unknown): string {
+    if (!(error instanceof HttpErrorResponse)) {
+      return 'Неверное имя пользователя или пароль';
+    }
+
+    if (error.status === 0) {
+      return 'Не удалось подключиться к серверу. Попробуйте позже.';
+    }
+
+    return this.extractErrorMessage(error) || 'Неверное имя пользователя или пароль';
+  }
+
+  private saveSession(response: AuthResponse): void {
+    this.saveToken(response.token);
+    this.saveCurrentUser(response.user);
+  }
+
+  private saveCurrentUser(user: CurrentUser): void {
+    localStorage.setItem(this.currentUserKey, JSON.stringify(user));
+    this.currentUserSubject.next(user);
+    this.preferencesService.useUser(user.username);
+  }
+
+  private readStoredCurrentUser(): CurrentUser | null {
+    const tokenUsername = this.getToken() ? this.decodeJwtSubject(this.getToken() ?? '') : null;
+
+    if (!tokenUsername) {
+      localStorage.removeItem(this.currentUserKey);
+      return null;
+    }
+
+    const raw = localStorage.getItem(this.currentUserKey);
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<CurrentUser>;
+
+      if (typeof parsed.id === 'number' && typeof parsed.username === 'string' && parsed.username.trim()) {
+        const username = parsed.username.trim();
+
+        if (username !== tokenUsername) {
+          localStorage.removeItem(this.currentUserKey);
+          return null;
+        }
+
+        return {
+          id: parsed.id,
+          username
+        };
+      }
+
+      localStorage.removeItem(this.currentUserKey);
+      return null;
+    } catch {
+      localStorage.removeItem(this.currentUserKey);
+      return null;
+    }
+  }
+
+  private extractErrorMessage(error: HttpErrorResponse): string {
+    if (typeof error.error === 'string') {
+      return error.error;
+    }
+
+    if (error.error && typeof error.error === 'object' && 'message' in error.error) {
+      const message = (error.error as { message?: unknown }).message;
+      return typeof message === 'string' ? message : '';
+    }
+
+    if (error.error && typeof error.error === 'object' && 'text' in error.error) {
+      const text = (error.error as { text?: unknown }).text;
+      return typeof text === 'string' ? text : '';
+    }
+
+    return '';
   }
 
   private decodeJwtSubject(token: string): string | null {

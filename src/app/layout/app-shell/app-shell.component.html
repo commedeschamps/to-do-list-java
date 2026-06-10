@@ -60,6 +60,29 @@
 
       <a
         class="sidebar-nav__item"
+        routerLink="/calendar"
+        routerLinkActive="sidebar-nav__item--active"
+        ariaCurrentWhenActive="page"
+      >
+        <span class="sidebar-nav__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M8 2v4" />
+            <path d="M16 2v4" />
+            <path d="M3 10h18" />
+            <path d="M7 14h.01" />
+            <path d="M12 14h.01" />
+            <path d="M17 14h.01" />
+            <path d="M7 18h.01" />
+            <path d="M12 18h.01" />
+            <path d="M17 18h.01" />
+            <path d="M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+          </svg>
+        </span>
+        <span>Календарь</span>
+      </a>
+
+      <a
+        class="sidebar-nav__item"
         routerLink="/priorities"
         routerLinkActive="sidebar-nav__item--active"
         ariaCurrentWhenActive="page"
@@ -101,7 +124,6 @@
         </div>
         <div class="sidebar-profile__copy">
           <p class="sidebar-profile__name">{{ profileName }}</p>
-          <p class="sidebar-profile__email">{{ profileEmail }}</p>
         </div>
       </div>
 
@@ -184,7 +206,6 @@
                 </div>
                 <div class="profile-menu__copy">
                   <p class="profile-menu__name">{{ profileName }}</p>
-                  <p class="profile-menu__email">{{ profileEmail }}</p>
                 </div>
               </div>
 

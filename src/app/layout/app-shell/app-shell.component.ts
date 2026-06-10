@@ -5,6 +5,7 @@ import { Subscription, filter } from 'rxjs';
 
 import { AuthService } from '../../core/services/auth.service';
 import { UserPreferences, UserPreferencesService } from '../../core/services/user-preferences.service';
+import { CurrentUser } from '../../shared/models/auth.model';
 import { ToastContainerComponent } from '../../shared/ui/toast/toast-container.component';
 
 @Component({
@@ -23,6 +24,7 @@ export class AppShellComponent implements OnDestroy {
   @ViewChild('profileMenuHost') private profileMenuHost?: ElementRef<HTMLElement>;
 
   preferences: UserPreferences = this.preferencesService.snapshot;
+  currentUser: CurrentUser | null = this.authService.getCurrentUser();
   isProfileMenuOpen = false;
   isSidebarOpen = false;
 
@@ -34,9 +36,24 @@ export class AppShellComponent implements OnDestroy {
     );
 
     this.subscriptions.add(
+      this.authService.currentUser$.subscribe((user) => {
+        this.currentUser = user;
+      })
+    );
+
+    this.subscriptions.add(
       this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe(() => {
         this.closeSidebar();
         this.closeProfileMenu();
+      })
+    );
+
+    this.subscriptions.add(
+      this.authService.refreshCurrentUser().subscribe({
+        error: () => {
+          this.authService.logout();
+          void this.router.navigateByUrl('/login');
+        }
       })
     );
   }
@@ -50,6 +67,10 @@ export class AppShellComponent implements OnDestroy {
 
     if (path.startsWith('/today')) {
       return 'Сегодня';
+    }
+
+    if (path.startsWith('/calendar')) {
+      return 'Календарь';
     }
 
     if (path.startsWith('/priorities')) {
@@ -74,24 +95,13 @@ export class AppShellComponent implements OnDestroy {
       return displayName;
     }
 
-    const username = this.authService.getUsername();
+    const username = this.currentUser?.username ?? this.authService.getUsername();
 
     if (!username) {
       return 'Пользователь';
     }
 
-    return username.includes('@') ? username.split('@')[0] || 'Пользователь' : username;
-  }
-
-  get profileEmail(): string {
-    const email = this.preferences.email.trim();
-
-    if (email) {
-      return email;
-    }
-
-    const username = this.authService.getUsername();
-    return username?.includes('@') ? username : 'user@example.com';
+    return username;
   }
 
   get profileInitial(): string {

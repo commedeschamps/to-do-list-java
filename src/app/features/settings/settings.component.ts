@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth.service';
@@ -23,8 +23,7 @@ export class SettingsComponent implements OnInit {
   private readonly maxAvatarSize = 2 * 1024 * 1024;
 
   readonly profileForm = this.fb.nonNullable.group({
-    displayName: [''],
-    email: ['', Validators.email]
+    displayName: ['']
   });
 
   readonly uiForm = this.fb.nonNullable.group({
@@ -39,8 +38,7 @@ export class SettingsComponent implements OnInit {
     const preferences = this.preferencesService.snapshot;
 
     this.profileForm.setValue({
-      displayName: preferences.displayName || this.defaultDisplayName,
-      email: preferences.email || this.defaultEmail
+      displayName: preferences.displayName || this.defaultDisplayName
     });
     this.uiForm.setValue({
       compactMode: preferences.compactMode,
@@ -56,12 +54,11 @@ export class SettingsComponent implements OnInit {
       return 'Пользователь';
     }
 
-    return username.includes('@') ? username.split('@')[0] || 'Пользователь' : username;
+    return username;
   }
 
-  get defaultEmail(): string {
-    const username = this.authService.getUsername();
-    return username?.includes('@') ? username : 'user@example.com';
+  get accountUsername(): string {
+    return this.authService.getUsername() ?? 'Пользователь';
   }
 
   get profileInitial(): string {
@@ -96,7 +93,7 @@ export class SettingsComponent implements OnInit {
 
     reader.onload = () => {
       this.avatarPreview = typeof reader.result === 'string' ? reader.result : null;
-      this.toastService.show('Avatar готов к сохранению', 'info');
+      this.toastService.show('Фото готово к сохранению', 'info');
     };
     reader.onerror = () => {
       this.avatarErrorMessage = 'Не удалось прочитать изображение.';
@@ -108,17 +105,10 @@ export class SettingsComponent implements OnInit {
   saveProfile(): void {
     this.avatarErrorMessage = '';
 
-    if (this.profileForm.invalid) {
-      this.profileForm.markAllAsTouched();
-      this.toastService.show('Проверьте email', 'error');
-      return;
-    }
-
     const value = this.profileForm.getRawValue();
     this.preferencesService.updateProfile({
       avatarDataUrl: this.avatarPreview,
-      displayName: value.displayName,
-      email: value.email
+      displayName: value.displayName
     });
     this.toastService.show('Профиль сохранён', 'success');
   }

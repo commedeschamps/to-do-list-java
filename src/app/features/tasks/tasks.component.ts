@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
-import Fuse from 'fuse.js';
+import Fuse, { type IFuseOptions } from 'fuse.js';
 import { Subscription, debounceTime, distinctUntilChanged, finalize } from 'rxjs';
 
 import { TaskService } from '../../core/services/task.service';
@@ -10,6 +10,7 @@ import { ToastService } from '../../shared/ui/toast/toast.service';
 
 type SearchableTask = Task & {
   completedLabel: string;
+  dueDateLabel: string;
   priorityLabel: string;
 };
 
@@ -46,14 +47,16 @@ export class TasksComponent implements OnInit, OnDestroy {
     title: ['', Validators.required],
     description: ['', Validators.required],
     completed: [false],
-    priority: ['medium' as TaskPriority, Validators.required]
+    priority: ['medium' as TaskPriority, Validators.required],
+    dueDate: ['']
   });
 
   readonly editForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
     description: ['', Validators.required],
     completed: [false],
-    priority: ['medium' as TaskPriority, Validators.required]
+    priority: ['medium' as TaskPriority, Validators.required],
+    dueDate: ['']
   });
 
   readonly filters: Array<{ label: string; value: TaskFilter }> = [
@@ -71,8 +74,18 @@ export class TasksComponent implements OnInit, OnDestroy {
   readonly skeletonItems = [0, 1, 2];
   readonly statSkeletonItems = [0, 1, 2, 3];
 
-  private searchIndex: Fuse<SearchableTask> | null = null;
-  private searchIndexTasks: SearchableTask[] = [];
+  private readonly searchOptions: IFuseOptions<SearchableTask> = {
+    keys: [
+      { name: 'title', weight: 0.44 },
+      { name: 'description', weight: 0.22 },
+      { name: 'priorityLabel', weight: 0.16 },
+      { name: 'completedLabel', weight: 0.08 },
+      { name: 'dueDateLabel', weight: 0.1 }
+    ],
+    threshold: 0.35,
+    ignoreLocation: true,
+    includeScore: true
+  };
   private readonly searchSubscription: Subscription;
 
   tasks: Task[] = [];
@@ -108,16 +121,16 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   get visibleTasks(): Task[] {
+    const filteredTasks = this.filteredTasks;
     const query = this.normalizedSearchQuery;
 
-    if (!query || !this.searchIndex) {
-      return this.filteredTasks;
+    if (!query) {
+      return filteredTasks;
     }
 
-    return this.searchIndex
+    return new Fuse(this.toSearchableTasks(filteredTasks), this.searchOptions)
       .search(query)
-      .map((result) => result.item)
-      .filter((task) => this.matchesActiveFilter(task));
+      .map((result) => result.item);
   }
 
   get totalCount(): number {
@@ -158,7 +171,7 @@ export class TasksComponent implements OnInit, OnDestroy {
         alt: 'Ничего не найдено',
         image: 'assets/sprites/empty-checklist-sad.png',
         kind: 'search',
-        text: 'Попробуйте изменить поисковый запрос или сбросить фильтр.',
+        text: 'Попробуйте изменить запрос или фильтр.',
         title: 'Ничего не найдено'
       };
     }
@@ -221,7 +234,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       title: '',
       description: '',
       completed: false,
-      priority: 'medium'
+      priority: 'medium',
+      dueDate: ''
     });
     this.isCreateModalOpen = true;
     window.setTimeout(() => this.focusFirstControl(this.createModalPanel), 0);
@@ -269,7 +283,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       title: task.title,
       description: task.description,
       completed: task.completed,
-      priority: this.taskPriority(task)
+      priority: this.taskPriority(task),
+      dueDate: task.dueDate ?? ''
     });
   }
 
@@ -306,13 +321,15 @@ export class TasksComponent implements OnInit, OnDestroy {
       title: '',
       description: '',
       completed: false,
-      priority: 'medium'
+      priority: 'medium',
+      dueDate: ''
     });
     this.editForm.reset({
       title: '',
       description: '',
       completed: false,
-      priority: 'medium'
+      priority: 'medium',
+      dueDate: ''
     });
   }
 
@@ -329,7 +346,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       title: task.title,
       description: task.description,
       completed: !task.completed,
-      priority: this.taskPriority(task)
+      priority: this.taskPriority(task),
+      dueDate: task.dueDate ?? null
     };
 
     this.taskService.updateTask(task.id, nextTask).subscribe({
@@ -418,6 +436,65 @@ export class TasksComponent implements OnInit, OnDestroy {
     return `priority-badge--${priority}`;
   }
 
+  dueDateLabel(task: Task): string {
+    if (!task.dueDate) {
+      return 'Без даты';
+    }
+
+    const dueDate = this.parseLocalDate(task.dueDate);
+
+    if (!dueDate) {
+      return 'Дата указана';
+    }
+
+    const diffDays = this.daysFromToday(dueDate);
+
+    if (diffDays < 0 && !task.completed) {
+      return 'Просрочено';
+    }
+
+    if (diffDays === 0) {
+      return 'Сегодня';
+    }
+
+    if (diffDays === 1) {
+      return 'Завтра';
+    }
+
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long'
+    }).format(dueDate);
+  }
+
+  dueDateClass(task: Task): string {
+    if (!task.dueDate) {
+      return 'due-date-badge--empty';
+    }
+
+    if (task.completed) {
+      return 'due-date-badge--done';
+    }
+
+    const dueDate = this.parseLocalDate(task.dueDate);
+
+    if (!dueDate) {
+      return 'due-date-badge--empty';
+    }
+
+    const diffDays = this.daysFromToday(dueDate);
+
+    if (diffDays < 0) {
+      return 'due-date-badge--overdue';
+    }
+
+    if (diffDays <= 1) {
+      return 'due-date-badge--soon';
+    }
+
+    return 'due-date-badge--planned';
+  }
+
   emptyStatePrimaryAction(state: TasksEmptyState): void {
     if (state.kind === 'noTasks') {
       this.openCreateModal();
@@ -485,27 +562,15 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   private setTasks(tasks: Task[]): void {
     this.tasks = tasks.map((task) => this.withNormalizedPriority(task));
-    this.rebuildSearchIndex();
   }
 
-  private rebuildSearchIndex(): void {
-    this.searchIndexTasks = this.tasks.map((task) => ({
+  private toSearchableTasks(tasks: Task[]): SearchableTask[] {
+    return tasks.map((task) => ({
       ...task,
+      dueDateLabel: this.dueDateLabel(task),
       completedLabel: task.completed ? 'Выполнена completed done завершена' : 'Активная active open',
       priorityLabel: `${this.priorityLabel(this.taskPriority(task))} ${this.taskPriority(task)}`
     }));
-    this.searchIndex = new Fuse(this.searchIndexTasks, {
-      keys: [
-        { name: 'title', weight: 0.5 },
-        { name: 'description', weight: 0.23 },
-        { name: 'priority', weight: 0.08 },
-        { name: 'priorityLabel', weight: 0.11 },
-        { name: 'completedLabel', weight: 0.08 }
-      ],
-      threshold: 0.35,
-      ignoreLocation: true,
-      includeScore: true
-    });
   }
 
   private matchesActiveFilter(task: Task): boolean {
@@ -530,6 +595,24 @@ export class TasksComponent implements OnInit, OnDestroy {
     }
 
     return 'medium';
+  }
+
+  private parseLocalDate(value: string): Date | null {
+    const [year, month, day] = value.split('-').map(Number);
+
+    if (!year || !month || !day) {
+      return null;
+    }
+
+    return new Date(year, month - 1, day);
+  }
+
+  private daysFromToday(date: Date): number {
+    const today = new Date();
+    const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    return Math.round((normalizedDate.getTime() - normalizedToday.getTime()) / 86_400_000);
   }
 
   private eventTarget(event?: Event): HTMLElement | null {

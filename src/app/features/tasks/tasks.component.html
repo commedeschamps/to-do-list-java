@@ -7,8 +7,11 @@
     </div>
 
     <button class="btn btn--primary tasks-hero__action" type="button" [disabled]="isSaving" (click)="openCreateModal($event)">
-      <span class="btn__icon btn__icon--asset" aria-hidden="true">
-        <img src="assets/sprites/plus-blue-pill.svg" alt="">
+      <span class="btn__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
       </span>
       <span>Добавить задачу</span>
     </button>
@@ -132,7 +135,7 @@
           <input
             class="tasks-search__input"
             type="search"
-            placeholder="Поиск задач..."
+            placeholder="Поиск по задачам..."
             aria-label="Поиск задач"
             [formControl]="searchControl"
           >
@@ -239,6 +242,15 @@
                     <small class="form-error">Описание обязательно.</small>
                   }
 
+                  <label class="sr-only" for="edit-due-date-{{ task.id }}">Дедлайн</label>
+                  <input
+                    id="edit-due-date-{{ task.id }}"
+                    class="inline-input"
+                    type="date"
+                    formControlName="dueDate"
+                    aria-label="Дедлайн"
+                  >
+
                   @if (editErrorMessage) {
                     <small class="form-error">{{ editErrorMessage }}</small>
                   }
@@ -289,6 +301,9 @@
                   </span>
                   <span class="status-badge task-status" [class.done]="task.completed">
                     {{ task.completed ? 'Выполнена' : 'Активная' }}
+                  </span>
+                  <span class="due-date-badge" [ngClass]="dueDateClass(task)">
+                    {{ dueDateLabel(task) }}
                   </span>
                 </div>
 
@@ -364,6 +379,11 @@
           @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
             <small class="form-error">Описание обязательно.</small>
           }
+        </div>
+
+        <div class="form-field">
+          <label for="task-due-date">Дедлайн</label>
+          <input id="task-due-date" type="date" formControlName="dueDate">
         </div>
 
         <div class="form-field">

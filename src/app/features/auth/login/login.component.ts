@@ -40,9 +40,9 @@ export class LoginComponent {
         this.isSubmitting = false;
         void this.router.navigateByUrl('/tasks');
       },
-      error: () => {
+      error: (error: unknown) => {
         this.isSubmitting = false;
-        this.errorMessage = 'Неверный логин или пароль.';
+        this.errorMessage = this.authService.getLoginErrorMessage(error);
       }
     });
   }

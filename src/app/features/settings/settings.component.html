@@ -12,6 +12,7 @@
       <header class="settings-card__header">
         <h2 id="profile-settings-title">Профиль</h2>
         <p>Эти данные будут отображаться в вашем профиле.</p>
+        <p class="settings-help">Имя аккаунта: <strong>{{ accountUsername }}</strong></p>
       </header>
 
       <form class="settings-form" [formGroup]="profileForm" (ngSubmit)="saveProfile()">
@@ -46,16 +47,8 @@
         </div>
 
         <div class="form-field">
-          <label for="display-name">Имя пользователя</label>
+          <label for="display-name">Отображаемое имя</label>
           <input id="display-name" type="text" formControlName="displayName" autocomplete="name">
-        </div>
-
-        <div class="form-field">
-          <label for="profile-email">Email</label>
-          <input id="profile-email" type="email" formControlName="email" autocomplete="email">
-          @if (profileForm.controls.email.touched && profileForm.controls.email.invalid) {
-            <small class="form-error">Введите корректный email.</small>
-          }
         </div>
 
         <div class="settings-actions">

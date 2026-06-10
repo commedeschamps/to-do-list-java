@@ -6,7 +6,6 @@ export interface UserPreferences {
   avatarDataUrl: string | null;
   compactMode: boolean;
   displayName: string;
-  email: string;
   reduceMotion: boolean;
 }
 
@@ -14,7 +13,6 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   avatarDataUrl: null,
   compactMode: false,
   displayName: '',
-  email: '',
   reduceMotion: false
 };
 
@@ -23,8 +21,9 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 })
 export class UserPreferencesService {
   private readonly document = inject(DOCUMENT);
-  private readonly storageKey = 'todo_user_preferences';
-  private readonly preferencesSubject = new BehaviorSubject<UserPreferences>(this.readPreferences());
+  private readonly storagePrefix = 'todo_user_preferences';
+  private activeStorageKey = `${this.storagePrefix}:anonymous`;
+  private readonly preferencesSubject = new BehaviorSubject<UserPreferences>({ ...DEFAULT_PREFERENCES });
 
   readonly preferences$ = this.preferencesSubject.asObservable();
 
@@ -36,11 +35,20 @@ export class UserPreferencesService {
     return this.preferencesSubject.value;
   }
 
-  updateProfile(profile: Pick<UserPreferences, 'displayName' | 'email' | 'avatarDataUrl'>): void {
+  useUser(username: string | null): void {
+    this.activeStorageKey = username?.trim()
+      ? `${this.storagePrefix}:${encodeURIComponent(username.trim())}`
+      : `${this.storagePrefix}:anonymous`;
+
+    const preferences = this.readPreferences();
+    this.preferencesSubject.next(preferences);
+    this.applyUiPreferences(preferences);
+  }
+
+  updateProfile(profile: Pick<UserPreferences, 'displayName' | 'avatarDataUrl'>): void {
     this.setPreferences({
       ...this.snapshot,
       displayName: profile.displayName.trim(),
-      email: profile.email.trim(),
       avatarDataUrl: profile.avatarDataUrl
     });
   }
@@ -61,13 +69,13 @@ export class UserPreferencesService {
   }
 
   private setPreferences(preferences: UserPreferences): void {
-    localStorage.setItem(this.storageKey, JSON.stringify(preferences));
+    localStorage.setItem(this.activeStorageKey, JSON.stringify(preferences));
     this.preferencesSubject.next(preferences);
     this.applyUiPreferences(preferences);
   }
 
   private readPreferences(): UserPreferences {
-    const raw = localStorage.getItem(this.storageKey);
+    const raw = localStorage.getItem(this.activeStorageKey);
 
     if (!raw) {
       return DEFAULT_PREFERENCES;
@@ -80,7 +88,6 @@ export class UserPreferencesService {
         avatarDataUrl: typeof parsed.avatarDataUrl === 'string' ? parsed.avatarDataUrl : null,
         compactMode: Boolean(parsed.compactMode),
         displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
-        email: typeof parsed.email === 'string' ? parsed.email : '',
         reduceMotion: Boolean(parsed.reduceMotion)
       };
     } catch {
