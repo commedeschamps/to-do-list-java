@@ -32,7 +32,7 @@ public class UserService implements UserDetailsService {
                 .build();
     }
 
-    public void register(String username, String password) {
+    public User register(String username, String password) {
         String normalizedUsername = username.trim();
 
         if (userRepository.findByUsername(normalizedUsername).isPresent()) {
@@ -42,6 +42,11 @@ public class UserService implements UserDetailsService {
         User user = new User();
         user.setUsername(normalizedUsername);
         user.setPassword(passwordEncoder.encode(password));
-        userRepository.save(user);
+        return userRepository.save(user);
+    }
+
+    public User getByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
     }
 }
