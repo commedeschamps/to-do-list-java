@@ -4,6 +4,9 @@ import com.example.todolist.dto.ApiErrorResponse;
 import com.example.todolist.dto.AuthResponse;
 import com.example.todolist.dto.CurrentUserResponse;
 import com.example.todolist.entity.Task;
+import com.example.todolist.repository.LabelRepository;
+import com.example.todolist.repository.ProjectRepository;
+import com.example.todolist.repository.SubtaskRepository;
 import com.example.todolist.repository.TaskRepository;
 import com.example.todolist.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +22,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,6 +34,9 @@ class AuthAndTaskOwnershipTests {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final ProjectRepository projectRepository;
+    private final LabelRepository labelRepository;
+    private final SubtaskRepository subtaskRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -36,10 +44,16 @@ class AuthAndTaskOwnershipTests {
     AuthAndTaskOwnershipTests(
             TaskRepository taskRepository,
             UserRepository userRepository,
+            ProjectRepository projectRepository,
+            LabelRepository labelRepository,
+            SubtaskRepository subtaskRepository,
             ObjectMapper objectMapper
     ) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
+        this.projectRepository = projectRepository;
+        this.labelRepository = labelRepository;
+        this.subtaskRepository = subtaskRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -48,7 +62,10 @@ class AuthAndTaskOwnershipTests {
 
     @BeforeEach
     void setUp() {
+        subtaskRepository.deleteAll();
         taskRepository.deleteAll();
+        labelRepository.deleteAll();
+        projectRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -185,6 +202,283 @@ class AuthAndTaskOwnershipTests {
         assertThat(aliceTasks[0].getTitle()).isEqualTo("Alice task");
     }
 
+    @Test
+    void taskDueDateIsSavedReturnedAndCanBeCleared() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        LocalDate dueDate = LocalDate.of(2026, 6, 11);
+
+        TestResponse<Task> createResponse = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                alice.token(),
+                taskPayload("Calendar task", "high", false, dueDate.toString()),
+                Task.class,
+                new Object[0]
+        );
+
+        assertThat(createResponse.is2xxSuccessful()).isTrue();
+        assertThat(createResponse.body()).isNotNull();
+        assertThat(createResponse.body().getDueDate()).isEqualTo(dueDate);
+        assertThat(createResponse.body().getCreatedAt()).isNotNull();
+        assertThat(createResponse.body().getUpdatedAt()).isNotNull();
+        assertThat(createResponse.body().getCompletedAt()).isNull();
+
+        Task[] tasks = getTasks(alice.token());
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks[0].getDueDate()).isEqualTo(dueDate);
+
+        TestResponse<Task> updateResponse = exchange(
+                "/api/tasks/{id}",
+                HttpMethod.PUT,
+                alice.token(),
+                taskPayload("Calendar task", "high", false, null),
+                Task.class,
+                createResponse.body().getId()
+        );
+
+        assertThat(updateResponse.is2xxSuccessful()).isTrue();
+        assertThat(updateResponse.body()).isNotNull();
+        assertThat(updateResponse.body().getDueDate()).isNull();
+
+        Task[] updatedTasks = getTasks(alice.token());
+        assertThat(updatedTasks).hasSize(1);
+        assertThat(updatedTasks[0].getDueDate()).isNull();
+    }
+
+    @Test
+    void taskCanBeCreatedWithoutDescription() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+
+        TestResponse<Task> response = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                alice.token(),
+                taskPayloadWithoutDescription("Task without description"),
+                Task.class,
+                new Object[0]
+        );
+
+        assertThat(response.is2xxSuccessful()).isTrue();
+        assertThat(response.body()).isNotNull();
+        assertThat(response.body().getTitle()).isEqualTo("Task without description");
+        assertThat(response.body().getDescription()).isNull();
+    }
+
+    @Test
+    void subtasksAreScopedThroughParentTask() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        AuthSession bob = register("bob123", "password1");
+        long aliceTaskId = createTask(alice.token(), "Alice task");
+
+        SubtaskApiResponse subtask = createSubtask(alice.token(), aliceTaskId, "First step");
+        assertThat(subtask.title()).isEqualTo("First step");
+        assertThat(subtask.completed()).isFalse();
+
+        TestResponse<SubtaskApiResponse> toggleResponse = exchange(
+                "/api/tasks/{taskId}/subtasks/{subtaskId}",
+                HttpMethod.PATCH,
+                alice.token(),
+                subtaskPayload(null, true),
+                SubtaskApiResponse.class,
+                aliceTaskId,
+                subtask.id()
+        );
+        assertThat(toggleResponse.is2xxSuccessful()).isTrue();
+        assertThat(toggleResponse.body()).isNotNull();
+        assertThat(toggleResponse.body().completed()).isTrue();
+
+        TestResponse<SubtaskApiResponse[]> listResponse = exchange(
+                "/api/tasks/{taskId}/subtasks",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                SubtaskApiResponse[].class,
+                aliceTaskId
+        );
+        assertThat(listResponse.is2xxSuccessful()).isTrue();
+        assertThat(listResponse.body()).hasSize(1);
+
+        TestResponse<ApiErrorResponse> bobReadResponse = exchange(
+                "/api/tasks/{taskId}/subtasks",
+                HttpMethod.GET,
+                bob.token(),
+                null,
+                ApiErrorResponse.class,
+                aliceTaskId
+        );
+        assertThat(bobReadResponse.statusCode()).isEqualTo(404);
+
+        TestResponse<ApiErrorResponse> bobUpdateResponse = exchange(
+                "/api/tasks/{taskId}/subtasks/{subtaskId}",
+                HttpMethod.PATCH,
+                bob.token(),
+                subtaskPayload("Bob edit", true),
+                ApiErrorResponse.class,
+                aliceTaskId,
+                subtask.id()
+        );
+        assertThat(bobUpdateResponse.statusCode()).isEqualTo(404);
+
+        TestResponse<ApiErrorResponse> bobDeleteResponse = exchange(
+                "/api/tasks/{taskId}/subtasks/{subtaskId}",
+                HttpMethod.DELETE,
+                bob.token(),
+                null,
+                ApiErrorResponse.class,
+                aliceTaskId,
+                subtask.id()
+        );
+        assertThat(bobDeleteResponse.statusCode()).isEqualTo(404);
+
+        TestResponse<String> deleteResponse = exchange(
+                "/api/tasks/{taskId}/subtasks/{subtaskId}",
+                HttpMethod.DELETE,
+                alice.token(),
+                null,
+                String.class,
+                aliceTaskId,
+                subtask.id()
+        );
+        assertThat(deleteResponse.is2xxSuccessful()).isTrue();
+
+        TestResponse<SubtaskApiResponse[]> emptyListResponse = exchange(
+                "/api/tasks/{taskId}/subtasks",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                SubtaskApiResponse[].class,
+                aliceTaskId
+        );
+        assertThat(emptyListResponse.body()).isEmpty();
+    }
+
+    @Test
+    void projectsAreUserScopedAndDeletingProjectKeepsTasks() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        AuthSession bob = register("bob123", "password1");
+
+        ProjectApiResponse project = createProject(alice.token(), "Учёба", "#3B82F6");
+        assertThat(project.name()).isEqualTo("Учёба");
+
+        TestResponse<ProjectApiResponse[]> bobProjects = exchange(
+                "/api/projects",
+                HttpMethod.GET,
+                bob.token(),
+                null,
+                ProjectApiResponse[].class,
+                new Object[0]
+        );
+        assertThat(bobProjects.is2xxSuccessful()).isTrue();
+        assertThat(bobProjects.body()).isEmpty();
+
+        TestResponse<TaskApiResponse> aliceTaskResponse = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                alice.token(),
+                taskPayload("Task in project", "medium", false, null, project.id(), null),
+                TaskApiResponse.class,
+                new Object[0]
+        );
+        assertThat(aliceTaskResponse.is2xxSuccessful()).isTrue();
+        assertThat(aliceTaskResponse.body()).isNotNull();
+        assertThat(aliceTaskResponse.body().project().id()).isEqualTo(project.id());
+
+        TestResponse<ApiErrorResponse> bobAssignResponse = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                bob.token(),
+                taskPayload("Bob task", "medium", false, null, project.id(), null),
+                ApiErrorResponse.class,
+                new Object[0]
+        );
+        assertThat(bobAssignResponse.statusCode()).isEqualTo(404);
+
+        TestResponse<String> deleteResponse = exchange(
+                "/api/projects/{id}",
+                HttpMethod.DELETE,
+                alice.token(),
+                null,
+                String.class,
+                project.id()
+        );
+        assertThat(deleteResponse.is2xxSuccessful()).isTrue();
+
+        TestResponse<TaskApiResponse[]> tasksAfterDelete = exchange(
+                "/api/tasks",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                TaskApiResponse[].class,
+                new Object[0]
+        );
+        assertThat(tasksAfterDelete.body()).hasSize(1);
+        assertThat(tasksAfterDelete.body()[0].project()).isNull();
+    }
+
+    @Test
+    void labelsAreUserScopedAndDeletingLabelKeepsTasks() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        AuthSession bob = register("bob123", "password1");
+
+        LabelApiResponse label = createLabel(alice.token(), "важно", "#FF6B6B");
+        assertThat(label.name()).isEqualTo("важно");
+
+        TestResponse<LabelApiResponse[]> bobLabels = exchange(
+                "/api/labels",
+                HttpMethod.GET,
+                bob.token(),
+                null,
+                LabelApiResponse[].class,
+                new Object[0]
+        );
+        assertThat(bobLabels.is2xxSuccessful()).isTrue();
+        assertThat(bobLabels.body()).isEmpty();
+
+        TestResponse<TaskApiResponse> aliceTaskResponse = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                alice.token(),
+                taskPayload("Task with label", "high", false, null, null, new Long[]{label.id()}),
+                TaskApiResponse.class,
+                new Object[0]
+        );
+        assertThat(aliceTaskResponse.is2xxSuccessful()).isTrue();
+        assertThat(aliceTaskResponse.body()).isNotNull();
+        assertThat(aliceTaskResponse.body().labels()).hasSize(1);
+        assertThat(aliceTaskResponse.body().labels()[0].id()).isEqualTo(label.id());
+
+        TestResponse<ApiErrorResponse> bobAssignResponse = exchange(
+                "/api/tasks",
+                HttpMethod.POST,
+                bob.token(),
+                taskPayload("Bob task", "medium", false, null, null, new Long[]{label.id()}),
+                ApiErrorResponse.class,
+                new Object[0]
+        );
+        assertThat(bobAssignResponse.statusCode()).isEqualTo(404);
+
+        TestResponse<String> deleteResponse = exchange(
+                "/api/labels/{id}",
+                HttpMethod.DELETE,
+                alice.token(),
+                null,
+                String.class,
+                label.id()
+        );
+        assertThat(deleteResponse.is2xxSuccessful()).isTrue();
+
+        TestResponse<TaskApiResponse[]> tasksAfterDelete = exchange(
+                "/api/tasks",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                TaskApiResponse[].class,
+                new Object[0]
+        );
+        assertThat(tasksAfterDelete.body()).hasSize(1);
+        assertThat(tasksAfterDelete.body()[0].labels()).isEmpty();
+    }
+
     private AuthSession register(String username, String password) throws Exception {
         TestResponse<AuthResponse> response = post(
                 "/api/auth/register",
@@ -232,12 +526,91 @@ class AuthAndTaskOwnershipTests {
     }
 
     private Map<String, Object> taskPayload(String title, String priority, boolean completed) {
-        return Map.of(
-                "title", title,
-                "description", "Description for " + title,
-                "completed", completed,
-                "priority", priority
+        return taskPayload(title, priority, completed, null);
+    }
+
+    private Map<String, Object> taskPayload(String title, String priority, boolean completed, String dueDate) {
+        return taskPayload(title, priority, completed, dueDate, null, null);
+    }
+
+    private Map<String, Object> taskPayload(
+            String title,
+            String priority,
+            boolean completed,
+            String dueDate,
+            Long projectId,
+            Long[] labelIds
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("title", title);
+        payload.put("description", "Description for " + title);
+        payload.put("completed", completed);
+        payload.put("priority", priority);
+        payload.put("dueDate", dueDate);
+        payload.put("projectId", projectId);
+        payload.put("labelIds", labelIds);
+        return payload;
+    }
+
+    private Map<String, Object> taskPayloadWithoutDescription(String title) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("title", title);
+        payload.put("completed", false);
+        payload.put("priority", "medium");
+        payload.put("dueDate", null);
+        return payload;
+    }
+
+    private ProjectApiResponse createProject(String token, String name, String color) throws Exception {
+        TestResponse<ProjectApiResponse> response = exchange(
+                "/api/projects",
+                HttpMethod.POST,
+                token,
+                Map.of("name", name, "color", color),
+                ProjectApiResponse.class,
+                new Object[0]
         );
+
+        assertThat(response.is2xxSuccessful()).isTrue();
+        assertThat(response.body()).isNotNull();
+        return response.body();
+    }
+
+    private LabelApiResponse createLabel(String token, String name, String color) throws Exception {
+        TestResponse<LabelApiResponse> response = exchange(
+                "/api/labels",
+                HttpMethod.POST,
+                token,
+                Map.of("name", name, "color", color),
+                LabelApiResponse.class,
+                new Object[0]
+        );
+
+        assertThat(response.is2xxSuccessful()).isTrue();
+        assertThat(response.body()).isNotNull();
+        return response.body();
+    }
+
+    private SubtaskApiResponse createSubtask(String token, long taskId, String title) throws Exception {
+        TestResponse<SubtaskApiResponse> response = exchange(
+                "/api/tasks/{taskId}/subtasks",
+                HttpMethod.POST,
+                token,
+                subtaskPayload(title, false),
+                SubtaskApiResponse.class,
+                taskId
+        );
+
+        assertThat(response.is2xxSuccessful()).isTrue();
+        assertThat(response.body()).isNotNull();
+        return response.body();
+    }
+
+    private Map<String, Object> subtaskPayload(String title, Boolean completed) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("title", title);
+        payload.put("completed", completed);
+        return payload;
     }
 
     private <T> TestResponse<T> post(String path, Object body, Class<T> responseType) throws Exception {
@@ -305,5 +678,28 @@ class AuthAndTaskOwnershipTests {
     }
 
     private record AuthSession(String token, long userId) {
+    }
+
+    private record ProjectApiResponse(Long id, String name, String color) {
+    }
+
+    private record LabelApiResponse(Long id, String name, String color) {
+    }
+
+    private record SubtaskApiResponse(Long id, String title, boolean completed) {
+    }
+
+    private record TaskApiResponse(
+            Long id,
+            String title,
+            String description,
+            boolean completed,
+            String priority,
+            String dueDate,
+            ProjectApiResponse project,
+            LabelApiResponse[] labels,
+            int subtaskTotal,
+            int subtaskCompleted
+    ) {
     }
 }
