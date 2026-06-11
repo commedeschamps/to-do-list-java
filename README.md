@@ -2,27 +2,6 @@
 
 Full-stack Todo List application with Angular frontend and Spring Boot backend. The project focuses on a clean dark navy task workspace with authentication, task CRUD, priorities, fuzzy search, statistics, keyboard-friendly modals, and responsive UI.
 
-## Скриншоты
-
-### Login
-
-![Login](src/assets/screenshots/login.png)
-
-### Tasks desktop
-
-![Tasks desktop](src/assets/screenshots/tasks-desktop.png)
-
-### Create task modal
-
-![Create task modal](src/assets/screenshots/create-modal.png)
-
-### Inline editing
-
-![Inline editing](src/assets/screenshots/inline-edit.png)
-
-### Mobile
-
-![Mobile](src/assets/screenshots/mobile.png)
 
 ## Возможности
 
@@ -83,17 +62,3 @@ npm run build
 - `public/assets` - runtime UI sprites and illustrations.
 - `src/assets/screenshots` - README screenshots.
 
-## UX детали
-
-- Dark navy design based on `#0f0f1a`, `#1a1a2e`, `#151528`, and `#3b82f6`.
-- Responsive layout without horizontal overflow on mobile.
-- Accessible search input, filter buttons, progressbar semantics, and keyboard-friendly modals.
-- Toast feedback for create, update, status changes, delete, and load errors.
-- Short animations with reduced motion support.
-- Skeleton loading uses non-semantic placeholders hidden from assistive tech.
-
-## Known limitations
-
-- Drag and drop ordering is not implemented yet.
-- Offline mode is not implemented yet.
-- Backend statistics endpoint is not needed yet; statistics are calculated client-side.
