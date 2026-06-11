@@ -2,7 +2,7 @@
 
 A production-grade, full-stack Todo List application featuring an Angular frontend and a Spring Boot backend. The application features a clean dark navy workspace with user-scoped tasks, priority boards, subtasks, projects, calendar and statistics views, and JWT-based authentication.
 
-Live Demo: https://to-do-list-java.vercel.app
+Live Demo: [todo.commedeschamps.dev](https://todo.commedeschamps.dev/)
 
 ## Overview
 
