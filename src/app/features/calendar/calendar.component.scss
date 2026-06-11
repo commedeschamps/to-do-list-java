@@ -100,6 +100,46 @@
   color: var(--color-text);
 }
 
+:host ::ng-deep .fc,
+:host ::ng-deep .fc .fc-view-harness,
+:host ::ng-deep .fc .fc-scrollgrid,
+:host ::ng-deep .fc .fc-scrollgrid-section > *,
+:host ::ng-deep .fc .fc-daygrid-body,
+:host ::ng-deep .fc .fc-daygrid-day,
+:host ::ng-deep .fc .fc-timegrid-slot,
+:host ::ng-deep .fc .fc-timegrid-col,
+:host ::ng-deep .fc .fc-col-header,
+:host ::ng-deep .fc .fc-col-header-cell {
+  background: transparent;
+}
+
+:host ::ng-deep .fc-theme-standard .fc-scrollgrid {
+  border-color: var(--color-border);
+}
+
+:host ::ng-deep .fc-theme-standard td,
+:host ::ng-deep .fc-theme-standard th {
+  border-color: var(--color-border);
+}
+
+:host ::ng-deep .fc .fc-col-header-cell {
+  background: #111122;
+  color: var(--color-text-muted);
+}
+
+:host ::ng-deep .fc .fc-col-header-cell-cushion {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  padding: 0.75rem 0.5rem;
+  text-transform: uppercase;
+}
+
+:host ::ng-deep .fc .fc-daygrid-day {
+  background: rgb(255 255 255 / 1.5%);
+}
+
 :host ::ng-deep .fc .fc-toolbar {
   align-items: center;
   gap: 0.75rem;
@@ -131,7 +171,15 @@
 }
 
 :host ::ng-deep .fc .fc-day-today {
-  background: rgb(59 130 246 / 10%);
+  background: rgb(59 130 246 / 12%);
+}
+
+:host ::ng-deep .fc .fc-day-other {
+  background: rgb(255 255 255 / 1%);
+}
+
+:host ::ng-deep .fc .fc-day-other .fc-daygrid-day-number {
+  color: var(--color-text-soft);
 }
 
 :host ::ng-deep .fc .fc-event {

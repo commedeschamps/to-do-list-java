@@ -82,19 +82,13 @@
             id="calendar-task-description"
             rows="4"
             formControlName="description"
-            placeholder="Добавьте детали задачи"
+            placeholder="Добавьте описание, если нужно"
           ></textarea>
-          @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
-            <small class="form-error">Описание обязательно.</small>
-          }
         </div>
 
         <div class="form-field">
           <label for="calendar-task-due-date">Дедлайн</label>
           <input id="calendar-task-due-date" type="date" formControlName="dueDate">
-          @if (taskForm.controls.dueDate.touched && taskForm.controls.dueDate.invalid) {
-            <small class="form-error">Укажите дату.</small>
-          }
         </div>
 
         <div class="form-field">
@@ -123,6 +117,9 @@
         }
 
         <div class="task-modal__actions">
+          @if (editingTask) {
+            <button class="btn btn--danger" type="button" [disabled]="isSaving" (click)="deleteTask()">Удалить</button>
+          }
           <button class="btn btn--secondary" type="button" (click)="closeModal()">Отмена</button>
           <button class="btn btn--primary" type="submit" [disabled]="isSaving">
             {{ isSaving ? 'Сохраняем...' : 'Сохранить' }}

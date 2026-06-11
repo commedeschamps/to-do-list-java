@@ -87,7 +87,9 @@
               </div>
               <div class="task-card__content">
                 <h3 class="task-card__title">{{ task.title }}</h3>
-                <p class="task-card__description">{{ task.description }}</p>
+                @if (task.description) {
+                  <p class="task-card__description">{{ task.description }}</p>
+                }
               </div>
               <div class="task-card__meta">
                 <span class="priority-badge" [ngClass]="priorityClass(taskPriority(task))">

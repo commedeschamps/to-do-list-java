@@ -4,8 +4,10 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { Subscription, filter } from 'rxjs';
 
 import { AuthService } from '../../core/services/auth.service';
+import { ProjectService } from '../../core/services/task.service';
 import { UserPreferences, UserPreferencesService } from '../../core/services/user-preferences.service';
 import { CurrentUser } from '../../shared/models/auth.model';
+import { Project } from '../../shared/models/task.model';
 import { ToastContainerComponent } from '../../shared/ui/toast/toast-container.component';
 
 @Component({
@@ -17,6 +19,7 @@ import { ToastContainerComponent } from '../../shared/ui/toast/toast-container.c
 })
 export class AppShellComponent implements OnDestroy {
   private readonly authService = inject(AuthService);
+  private readonly projectService = inject(ProjectService);
   private readonly preferencesService = inject(UserPreferencesService);
   private readonly router = inject(Router);
   private readonly subscriptions = new Subscription();
@@ -25,6 +28,7 @@ export class AppShellComponent implements OnDestroy {
 
   preferences: UserPreferences = this.preferencesService.snapshot;
   currentUser: CurrentUser | null = this.authService.getCurrentUser();
+  projects: Project[] = [];
   isProfileMenuOpen = false;
   isSidebarOpen = false;
 
@@ -45,11 +49,15 @@ export class AppShellComponent implements OnDestroy {
       this.router.events.pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd)).subscribe(() => {
         this.closeSidebar();
         this.closeProfileMenu();
+        this.loadProjects();
       })
     );
 
     this.subscriptions.add(
       this.authService.refreshCurrentUser().subscribe({
+        next: () => {
+          this.loadProjects();
+        },
         error: () => {
           this.authService.logout();
           void this.router.navigateByUrl('/login');
@@ -137,6 +145,17 @@ export class AppShellComponent implements OnDestroy {
     this.closeSidebar();
     this.authService.logout();
     void this.router.navigateByUrl('/login');
+  }
+
+  private loadProjects(): void {
+    this.projectService.getProjects().subscribe({
+      next: (projects) => {
+        this.projects = projects;
+      },
+      error: () => {
+        this.projects = [];
+      }
+    });
   }
 
   @HostListener('document:keydown', ['$event'])

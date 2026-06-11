@@ -138,13 +138,16 @@ export class PrioritiesComponent implements OnInit {
     };
   }
 
-  private toPayload(task: Task): Required<TaskPayload> {
+  private toPayload(task: Task): TaskPayload {
     return {
       title: task.title,
-      description: task.description,
+      description: task.description ?? null,
       completed: task.completed,
       priority: this.taskPriority(task),
-      dueDate: task.dueDate ?? null
+      dueDate: task.dueDate ?? null,
+      projectId: task.project?.id ?? null,
+      labelIds: task.labels?.map((label) => label.id) ?? [],
+      color: task.color ?? null
     };
   }
 

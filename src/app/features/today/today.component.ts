@@ -63,10 +63,13 @@ export class TodayComponent implements OnInit {
     this.taskService
       .updateTask(task.id, {
         title: task.title,
-        description: task.description,
+        description: task.description ?? null,
         completed: !task.completed,
         priority: this.taskPriority(task),
-        dueDate: task.dueDate ?? null
+        dueDate: task.dueDate ?? null,
+        projectId: task.project?.id ?? null,
+        labelIds: task.labels?.map((label) => label.id) ?? [],
+        color: task.color ?? null
       })
       .subscribe({
         next: (updatedTask) => {

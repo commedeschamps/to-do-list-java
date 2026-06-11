@@ -1,20 +1,23 @@
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import Fuse, { type IFuseOptions } from 'fuse.js';
-import { Subscription, debounceTime, distinctUntilChanged, finalize } from 'rxjs';
+import { Subscription, debounceTime, distinctUntilChanged, finalize, forkJoin } from 'rxjs';
 
-import { TaskService } from '../../core/services/task.service';
-import { Task, TaskFilter, TaskPriority } from '../../shared/models/task.model';
+import { LabelService, ProjectService, SubtaskService, TaskService } from '../../core/services/task.service';
+import { Label, Project, Subtask, Task, TaskDateFilter, TaskFilter, TaskPriority, TaskSortMode } from '../../shared/models/task.model';
 import { ToastService } from '../../shared/ui/toast/toast.service';
 
 type SearchableTask = Task & {
   completedLabel: string;
   dueDateLabel: string;
+  labelsLabel: string;
   priorityLabel: string;
+  projectLabel: string;
 };
 
-type EmptyStateKind = 'noTasks' | 'noActive' | 'noCompleted' | 'search';
+type EmptyStateKind = 'noTasks' | 'noActive' | 'noCompleted' | 'search' | 'project' | 'label' | 'filters';
 
 interface TasksEmptyState {
   alt: string;
@@ -34,7 +37,11 @@ interface TasksEmptyState {
 export class TasksComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly taskService = inject(TaskService);
+  private readonly projectService = inject(ProjectService);
+  private readonly labelService = inject(LabelService);
+  private readonly subtaskService = inject(SubtaskService);
   private readonly toastService = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
   private createModalTrigger: HTMLElement | null = null;
   private confirmModalTrigger: HTMLElement | null = null;
 
@@ -45,24 +52,52 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   readonly taskForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
-    description: ['', Validators.required],
+    description: [''],
     completed: [false],
     priority: ['medium' as TaskPriority, Validators.required],
-    dueDate: ['']
+    dueDate: [''],
+    projectId: [0],
+    labelIds: [[] as number[]],
+    color: ['#3B82F6']
   });
 
   readonly editForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
-    description: ['', Validators.required],
+    description: [''],
     completed: [false],
     priority: ['medium' as TaskPriority, Validators.required],
-    dueDate: ['']
+    dueDate: [''],
+    projectId: [0],
+    labelIds: [[] as number[]],
+    color: ['#3B82F6']
   });
+
+  readonly newProjectNameControl = new FormControl('', { nonNullable: true });
+  readonly newProjectColorControl = new FormControl('#3B82F6', { nonNullable: true });
+  readonly newLabelNameControl = new FormControl('', { nonNullable: true });
+  readonly newLabelColorControl = new FormControl('#FF6B6B', { nonNullable: true });
+  readonly subtaskTitleControl = new FormControl('', { nonNullable: true });
 
   readonly filters: Array<{ label: string; value: TaskFilter }> = [
     { label: 'Все', value: 'all' },
     { label: 'Активные', value: 'active' },
     { label: 'Выполненные', value: 'completed' }
+  ];
+
+  readonly dateFilters: Array<{ label: string; value: TaskDateFilter }> = [
+    { label: 'Любая дата', value: 'all' },
+    { label: 'Просроченные', value: 'overdue' },
+    { label: 'Сегодня', value: 'today' },
+    { label: 'Без даты', value: 'noDate' }
+  ];
+
+  readonly sortOptions: Array<{ label: string; value: TaskSortMode }> = [
+    { label: 'Сначала срочные', value: 'dueDate' },
+    { label: 'Высокий приоритет', value: 'priority' },
+    { label: 'Сначала новые', value: 'newest' },
+    { label: 'Сначала старые', value: 'oldest' },
+    { label: 'Сначала выполненные', value: 'completedFirst' },
+    { label: 'Сначала активные', value: 'activeFirst' }
   ];
 
   readonly priorities: Array<{ label: string; value: TaskPriority }> = [
@@ -78,6 +113,8 @@ export class TasksComponent implements OnInit, OnDestroy {
     keys: [
       { name: 'title', weight: 0.44 },
       { name: 'description', weight: 0.22 },
+      { name: 'projectLabel', weight: 0.1 },
+      { name: 'labelsLabel', weight: 0.12 },
       { name: 'priorityLabel', weight: 0.16 },
       { name: 'completedLabel', weight: 0.08 },
       { name: 'dueDateLabel', weight: 0.1 }
@@ -86,14 +123,25 @@ export class TasksComponent implements OnInit, OnDestroy {
     ignoreLocation: true,
     includeScore: true
   };
-  private readonly searchSubscription: Subscription;
+  private readonly subscriptions = new Subscription();
 
   tasks: Task[] = [];
+  projects: Project[] = [];
+  labels: Label[] = [];
+  subtasksByTaskId: Record<number, Subtask[]> = {};
   activeFilter: TaskFilter = 'all';
+  activeProjectId: number | 'all' = 'all';
+  activeLabelId: number | 'all' = 'all';
+  activePriority: TaskPriority | 'all' = 'all';
+  activeDateFilter: TaskDateFilter = 'all';
+  sortMode: TaskSortMode = 'dueDate';
   editingTaskId: number | null = null;
   taskPendingDelete: Task | null = null;
   isLoading = false;
   isSaving = false;
+  isSubtaskSaving = false;
+  isProjectSaving = false;
+  isLabelSaving = false;
   isCreateModalOpen = false;
   formErrorMessage = '';
   editErrorMessage = '';
@@ -101,23 +149,31 @@ export class TasksComponent implements OnInit, OnDestroy {
   searchQuery = '';
 
   constructor() {
-    this.searchSubscription = this.searchControl.valueChanges
-      .pipe(debounceTime(220), distinctUntilChanged())
-      .subscribe((query) => {
-        this.searchQuery = query;
-      });
+    this.subscriptions.add(
+      this.searchControl.valueChanges
+        .pipe(debounceTime(220), distinctUntilChanged())
+        .subscribe((query) => {
+          this.searchQuery = query;
+        })
+    );
   }
 
   ngOnInit(): void {
+    this.subscriptions.add(
+      this.route.queryParamMap.subscribe((params) => {
+        const projectParam = Number(params.get('project'));
+        this.activeProjectId = Number.isFinite(projectParam) && projectParam > 0 ? projectParam : 'all';
+      })
+    );
     this.loadTasks();
   }
 
   ngOnDestroy(): void {
-    this.searchSubscription.unsubscribe();
+    this.subscriptions.unsubscribe();
   }
 
   get filteredTasks(): Task[] {
-    return this.tasks.filter((task) => this.matchesActiveFilter(task));
+    return this.tasks.filter((task) => this.matchesFilters(task));
   }
 
   get visibleTasks(): Task[] {
@@ -125,12 +181,14 @@ export class TasksComponent implements OnInit, OnDestroy {
     const query = this.normalizedSearchQuery;
 
     if (!query) {
-      return filteredTasks;
+      return this.sortTasks(filteredTasks);
     }
 
-    return new Fuse(this.toSearchableTasks(filteredTasks), this.searchOptions)
+    const searchedTasks = new Fuse(this.toSearchableTasks(filteredTasks), this.searchOptions)
       .search(query)
       .map((result) => result.item);
+
+    return this.sortTasks(searchedTasks);
   }
 
   get totalCount(): number {
@@ -147,6 +205,14 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   get highPriorityCount(): number {
     return this.tasks.filter((task) => this.taskPriority(task) === 'high').length;
+  }
+
+  get overdueCount(): number {
+    return this.tasks.filter((task) => this.isOverdue(task)).length;
+  }
+
+  get todayCount(): number {
+    return this.tasks.filter((task) => this.isToday(task)).length;
   }
 
   get progressPercent(): number {
@@ -186,6 +252,26 @@ export class TasksComponent implements OnInit, OnDestroy {
       };
     }
 
+    if (this.activeProjectId !== 'all') {
+      return {
+        alt: 'Нет задач в проекте',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'project',
+        text: 'Добавьте задачу в выбранный проект или измените фильтр.',
+        title: 'Нет задач в этом проекте'
+      };
+    }
+
+    if (this.activeLabelId !== 'all') {
+      return {
+        alt: 'Нет задач с меткой',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'label',
+        text: 'Добавьте метку к задаче или выберите другую метку.',
+        title: 'Нет задач с этой меткой'
+      };
+    }
+
     if (this.activeFilter === 'active') {
       return {
         alt: 'Все задачи выполнены',
@@ -206,6 +292,16 @@ export class TasksComponent implements OnInit, OnDestroy {
       };
     }
 
+    if (this.activePriority !== 'all' || this.activeDateFilter !== 'all') {
+      return {
+        alt: 'Нет задач по фильтрам',
+        image: 'assets/sprites/empty-checklist-sad.png',
+        kind: 'filters',
+        text: 'Попробуйте изменить параметры фильтра.',
+        title: 'Нет задач по выбранным условиям'
+      };
+    }
+
     return null;
   }
 
@@ -213,15 +309,20 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.listErrorMessage = '';
 
-    this.taskService
-      .getTasks()
+    forkJoin({
+      tasks: this.taskService.getTasks(),
+      projects: this.projectService.getProjects(),
+      labels: this.labelService.getLabels()
+    })
       .pipe(finalize(() => (this.isLoading = false)))
       .subscribe({
-        next: (tasks) => {
+        next: ({ tasks, projects, labels }) => {
+          this.projects = projects;
+          this.labels = labels;
           this.setTasks(tasks);
         },
         error: () => {
-          this.listErrorMessage = 'Не удалось загрузить задачи.';
+          this.listErrorMessage = 'Не удалось загрузить задачи и справочники.';
           this.toastService.show('Не удалось загрузить задачи', 'error');
         }
       });
@@ -235,7 +336,10 @@ export class TasksComponent implements OnInit, OnDestroy {
       description: '',
       completed: false,
       priority: 'medium',
-      dueDate: ''
+      dueDate: '',
+      projectId: 0,
+      labelIds: [],
+      color: '#3B82F6'
     });
     this.isCreateModalOpen = true;
     window.setTimeout(() => this.focusFirstControl(this.createModalPanel), 0);
@@ -260,7 +364,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.isSaving = true;
 
     this.taskService
-      .createTask(formValue)
+      .createTask(this.toTaskPayload(formValue))
       .pipe(finalize(() => (this.isSaving = false)))
       .subscribe({
         next: (createdTask) => {
@@ -281,11 +385,15 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.editErrorMessage = '';
     this.editForm.setValue({
       title: task.title,
-      description: task.description,
+      description: task.description ?? '',
       completed: task.completed,
       priority: this.taskPriority(task),
-      dueDate: task.dueDate ?? ''
+      dueDate: task.dueDate ?? '',
+      projectId: task.project?.id ?? 0,
+      labelIds: task.labels?.map((label) => label.id) ?? [],
+      color: task.color ?? task.project?.color ?? '#3B82F6'
     });
+    this.loadSubtasks(task.id);
   }
 
   saveInlineEdit(task: Task): void {
@@ -299,7 +407,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.isSaving = true;
 
     this.taskService
-      .updateTask(task.id, this.editForm.getRawValue())
+      .updateTask(task.id, this.toTaskPayload(this.editForm.getRawValue()))
       .pipe(finalize(() => (this.isSaving = false)))
       .subscribe({
         next: (updatedTask) => {
@@ -322,32 +430,218 @@ export class TasksComponent implements OnInit, OnDestroy {
       description: '',
       completed: false,
       priority: 'medium',
-      dueDate: ''
+      dueDate: '',
+      projectId: 0,
+      labelIds: [],
+      color: '#3B82F6'
     });
     this.editForm.reset({
       title: '',
       description: '',
       completed: false,
       priority: 'medium',
-      dueDate: ''
+      dueDate: '',
+      projectId: 0,
+      labelIds: [],
+      color: '#3B82F6'
     });
+    this.subtaskTitleControl.setValue('');
   }
 
   setFilter(filter: TaskFilter): void {
     this.activeFilter = filter;
   }
 
+  setProjectFilter(event: Event): void {
+    const value = this.selectValue(event);
+    this.activeProjectId = value === 'all' ? 'all' : Number(value);
+  }
+
+  setLabelFilter(event: Event): void {
+    const value = this.selectValue(event);
+    this.activeLabelId = value === 'all' ? 'all' : Number(value);
+  }
+
+  setPriorityFilter(event: Event): void {
+    const value = this.selectValue(event);
+    this.activePriority = value === 'all' ? 'all' : this.normalizePriority(value);
+  }
+
+  setDateFilter(event: Event): void {
+    const value = this.selectValue(event);
+    this.activeDateFilter = value === 'overdue' || value === 'today' || value === 'noDate' ? value : 'all';
+  }
+
+  setSortMode(event: Event): void {
+    const value = this.selectValue(event);
+    const sortModes: TaskSortMode[] = ['dueDate', 'priority', 'newest', 'oldest', 'completedFirst', 'activeFirst'];
+    this.sortMode = sortModes.includes(value as TaskSortMode) ? (value as TaskSortMode) : 'dueDate';
+  }
+
+  clearAdvancedFilters(): void {
+    this.activeFilter = 'all';
+    this.activeProjectId = 'all';
+    this.activeLabelId = 'all';
+    this.activePriority = 'all';
+    this.activeDateFilter = 'all';
+  }
+
   clearSearch(): void {
     this.searchControl.setValue('');
   }
 
+  isLabelSelected(control: 'create' | 'edit', labelId: number): boolean {
+    const labelIds = control === 'create' ? this.taskForm.controls.labelIds.value : this.editForm.controls.labelIds.value;
+    return labelIds.includes(labelId);
+  }
+
+  toggleLabel(control: 'create' | 'edit', labelId: number): void {
+    const formControl = control === 'create' ? this.taskForm.controls.labelIds : this.editForm.controls.labelIds;
+    const labelIds = formControl.value;
+    formControl.setValue(labelIds.includes(labelId) ? labelIds.filter((id) => id !== labelId) : [...labelIds, labelId]);
+  }
+
+  createProject(control: 'create' | 'edit'): void {
+    const name = this.newProjectNameControl.value.trim();
+
+    if (!name) {
+      this.toastService.show('Введите название проекта', 'error');
+      return;
+    }
+
+    this.isProjectSaving = true;
+    this.projectService
+      .createProject({ name, color: this.newProjectColorControl.value })
+      .pipe(finalize(() => (this.isProjectSaving = false)))
+      .subscribe({
+        next: (project) => {
+          this.projects = [...this.projects, project].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+          const targetControl = control === 'create' ? this.taskForm.controls.projectId : this.editForm.controls.projectId;
+          targetControl.setValue(project.id);
+          this.newProjectNameControl.setValue('');
+          this.toastService.show('Проект создан', 'success');
+        },
+        error: () => {
+          this.toastService.show('Не удалось создать проект', 'error');
+        }
+      });
+  }
+
+  createLabel(control: 'create' | 'edit'): void {
+    const name = this.newLabelNameControl.value.trim();
+
+    if (!name) {
+      this.toastService.show('Введите название метки', 'error');
+      return;
+    }
+
+    this.isLabelSaving = true;
+    this.labelService
+      .createLabel({ name, color: this.newLabelColorControl.value })
+      .pipe(finalize(() => (this.isLabelSaving = false)))
+      .subscribe({
+        next: (label) => {
+          this.labels = [...this.labels, label].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+          const targetControl = control === 'create' ? this.taskForm.controls.labelIds : this.editForm.controls.labelIds;
+          targetControl.setValue([...targetControl.value, label.id]);
+          this.newLabelNameControl.setValue('');
+          this.toastService.show('Метка создана', 'success');
+        },
+        error: () => {
+          this.toastService.show('Не удалось создать метку', 'error');
+        }
+      });
+  }
+
+  subtasksFor(task: Task): Subtask[] {
+    return this.subtasksByTaskId[task.id] ?? [];
+  }
+
+  subtaskProgressLabel(task: Task): string {
+    const loadedSubtasks = this.subtasksByTaskId[task.id];
+    const total = loadedSubtasks?.length ?? task.subtaskTotal ?? 0;
+    const completed = loadedSubtasks?.filter((subtask) => subtask.completed).length ?? task.subtaskCompleted ?? 0;
+    return `Подзадачи ${completed}/${total}`;
+  }
+
+  hasSubtasks(task: Task): boolean {
+    return (task.subtaskTotal ?? 0) > 0 || this.subtasksFor(task).length > 0;
+  }
+
+  addSubtask(task: Task): void {
+    const title = this.subtaskTitleControl.value.trim();
+
+    if (!title) {
+      this.toastService.show('Введите название подзадачи', 'error');
+      return;
+    }
+
+    this.isSubtaskSaving = true;
+    this.subtaskService
+      .createSubtask(task.id, { title, completed: false })
+      .pipe(finalize(() => (this.isSubtaskSaving = false)))
+      .subscribe({
+        next: (subtask) => {
+          this.setSubtasks(task.id, [...this.subtasksFor(task), subtask]);
+          this.subtaskTitleControl.setValue('');
+          this.toastService.show('Подзадача добавлена', 'success');
+        },
+        error: () => {
+          this.toastService.show('Не удалось добавить подзадачу', 'error');
+        }
+      });
+  }
+
+  toggleSubtask(task: Task, subtask: Subtask): void {
+    this.subtaskService.updateSubtask(task.id, subtask.id, { completed: !subtask.completed }).subscribe({
+      next: (updatedSubtask) => {
+        this.setSubtasks(
+          task.id,
+          this.subtasksFor(task).map((item) => (item.id === updatedSubtask.id ? updatedSubtask : item))
+        );
+      },
+      error: () => {
+        this.toastService.show('Не удалось обновить подзадачу', 'error');
+      }
+    });
+  }
+
+  renameSubtask(task: Task, subtask: Subtask, event: Event): void {
+    const nextTitle = this.selectValue(event).trim();
+
+    if (!nextTitle || nextTitle === subtask.title) {
+      return;
+    }
+
+    this.subtaskService.updateSubtask(task.id, subtask.id, { title: nextTitle }).subscribe({
+      next: (updatedSubtask) => {
+        this.setSubtasks(
+          task.id,
+          this.subtasksFor(task).map((item) => (item.id === updatedSubtask.id ? updatedSubtask : item))
+        );
+      },
+      error: () => {
+        this.toastService.show('Не удалось переименовать подзадачу', 'error');
+      }
+    });
+  }
+
+  deleteSubtask(task: Task, subtask: Subtask): void {
+    this.subtaskService.deleteSubtask(task.id, subtask.id).subscribe({
+      next: () => {
+        this.setSubtasks(task.id, this.subtasksFor(task).filter((item) => item.id !== subtask.id));
+        this.toastService.show('Подзадача удалена', 'info');
+      },
+      error: () => {
+        this.toastService.show('Не удалось удалить подзадачу', 'error');
+      }
+    });
+  }
+
   toggleCompleted(task: Task): void {
     const nextTask = {
-      title: task.title,
-      description: task.description,
-      completed: !task.completed,
-      priority: this.taskPriority(task),
-      dueDate: task.dueDate ?? null
+      ...this.toPayloadFromTask(task),
+      completed: !task.completed
     };
 
     this.taskService.updateTask(task.id, nextTask).subscribe({
@@ -495,13 +789,30 @@ export class TasksComponent implements OnInit, OnDestroy {
     return 'due-date-badge--planned';
   }
 
+  visibleLabels(task: Task): Label[] {
+    return (task.labels ?? []).slice(0, 3);
+  }
+
+  extraLabelsCount(task: Task): number {
+    return Math.max((task.labels?.length ?? 0) - 3, 0);
+  }
+
+  projectColor(project: Project | null | undefined): string {
+    return project?.color || '#3B82F6';
+  }
+
+  taskColor(task: Task): string | null {
+    return task.color || task.project?.color || null;
+  }
+
   emptyStatePrimaryAction(state: TasksEmptyState): void {
     if (state.kind === 'noTasks') {
       this.openCreateModal();
       return;
     }
 
-    if (state.kind === 'noActive' || state.kind === 'search') {
+    if (state.kind === 'noActive' || state.kind === 'search' || state.kind === 'project' || state.kind === 'label' || state.kind === 'filters') {
+      this.clearAdvancedFilters();
       this.setFilter('all');
       return;
     }
@@ -516,6 +827,10 @@ export class TasksComponent implements OnInit, OnDestroy {
 
     if (state.kind === 'noCompleted') {
       return 'Показать активные';
+    }
+
+    if (state.kind === 'project' || state.kind === 'label' || state.kind === 'filters') {
+      return 'Сбросить фильтры';
     }
 
     return 'Показать все задачи';
@@ -556,7 +871,11 @@ export class TasksComponent implements OnInit, OnDestroy {
   private withNormalizedPriority(task: Task): Task {
     return {
       ...task,
-      priority: this.normalizePriority(task.priority)
+      description: task.description ?? null,
+      labels: task.labels ?? [],
+      priority: this.normalizePriority(task.priority),
+      subtaskTotal: task.subtaskTotal ?? 0,
+      subtaskCompleted: task.subtaskCompleted ?? 0
     };
   }
 
@@ -569,8 +888,20 @@ export class TasksComponent implements OnInit, OnDestroy {
       ...task,
       dueDateLabel: this.dueDateLabel(task),
       completedLabel: task.completed ? 'Выполнена completed done завершена' : 'Активная active open',
-      priorityLabel: `${this.priorityLabel(this.taskPriority(task))} ${this.taskPriority(task)}`
+      labelsLabel: (task.labels ?? []).map((label) => label.name).join(' '),
+      priorityLabel: `${this.priorityLabel(this.taskPriority(task))} ${this.taskPriority(task)}`,
+      projectLabel: task.project?.name ?? ''
     }));
+  }
+
+  private matchesFilters(task: Task): boolean {
+    return (
+      this.matchesActiveFilter(task) &&
+      this.matchesProjectFilter(task) &&
+      this.matchesLabelFilter(task) &&
+      this.matchesPriorityFilter(task) &&
+      this.matchesDateFilter(task)
+    );
   }
 
   private matchesActiveFilter(task: Task): boolean {
@@ -583,6 +914,198 @@ export class TasksComponent implements OnInit, OnDestroy {
     }
 
     return true;
+  }
+
+  private matchesProjectFilter(task: Task): boolean {
+    return this.activeProjectId === 'all' || task.project?.id === this.activeProjectId;
+  }
+
+  private matchesLabelFilter(task: Task): boolean {
+    return this.activeLabelId === 'all' || (task.labels ?? []).some((label) => label.id === this.activeLabelId);
+  }
+
+  private matchesPriorityFilter(task: Task): boolean {
+    return this.activePriority === 'all' || this.taskPriority(task) === this.activePriority;
+  }
+
+  private matchesDateFilter(task: Task): boolean {
+    if (this.activeDateFilter === 'overdue') {
+      return this.isOverdue(task);
+    }
+
+    if (this.activeDateFilter === 'today') {
+      return this.isToday(task);
+    }
+
+    if (this.activeDateFilter === 'noDate') {
+      return !task.dueDate;
+    }
+
+    return true;
+  }
+
+  private sortTasks(tasks: Task[]): Task[] {
+    return [...tasks].sort((first, second) => {
+      if (this.sortMode === 'priority') {
+        return this.priorityRank(second) - this.priorityRank(first) || this.compareDueDates(first, second);
+      }
+
+      if (this.sortMode === 'newest') {
+        return this.timestamp(second.createdAt) - this.timestamp(first.createdAt);
+      }
+
+      if (this.sortMode === 'oldest') {
+        return this.timestamp(first.createdAt) - this.timestamp(second.createdAt);
+      }
+
+      if (this.sortMode === 'completedFirst') {
+        return Number(second.completed) - Number(first.completed) || this.compareDueDates(first, second);
+      }
+
+      if (this.sortMode === 'activeFirst') {
+        return Number(first.completed) - Number(second.completed) || this.compareDueDates(first, second);
+      }
+
+      return this.compareDueDates(first, second) || this.priorityRank(second) - this.priorityRank(first);
+    });
+  }
+
+  private compareDueDates(first: Task, second: Task): number {
+    return this.dueDateRank(first) - this.dueDateRank(second) || this.dueDateTime(first) - this.dueDateTime(second);
+  }
+
+  private dueDateRank(task: Task): number {
+    if (this.isOverdue(task)) {
+      return 0;
+    }
+
+    if (this.isToday(task)) {
+      return 1;
+    }
+
+    if (task.dueDate) {
+      return 2;
+    }
+
+    return 3;
+  }
+
+  private dueDateTime(task: Task): number {
+    if (!task.dueDate) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    return this.parseLocalDate(task.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  }
+
+  private priorityRank(task: Task): number {
+    const priority = this.taskPriority(task);
+
+    if (priority === 'high') {
+      return 3;
+    }
+
+    if (priority === 'medium') {
+      return 2;
+    }
+
+    return 1;
+  }
+
+  private timestamp(value: string | undefined): number {
+    return value ? new Date(value).getTime() : 0;
+  }
+
+  private isOverdue(task: Task): boolean {
+    if (!task.dueDate || task.completed) {
+      return false;
+    }
+
+    const dueDate = this.parseLocalDate(task.dueDate);
+    return dueDate ? this.daysFromToday(dueDate) < 0 : false;
+  }
+
+  private isToday(task: Task): boolean {
+    if (!task.dueDate) {
+      return false;
+    }
+
+    const dueDate = this.parseLocalDate(task.dueDate);
+    return dueDate ? this.daysFromToday(dueDate) === 0 : false;
+  }
+
+  private toTaskPayload(formValue: {
+    title: string;
+    description: string;
+    completed: boolean;
+    priority: TaskPriority;
+    dueDate: string;
+    projectId: number;
+    labelIds: number[];
+    color: string;
+  }) {
+    return {
+      title: formValue.title,
+      description: formValue.description,
+      completed: formValue.completed,
+      priority: formValue.priority,
+      dueDate: formValue.dueDate || null,
+      projectId: formValue.projectId || null,
+      labelIds: formValue.labelIds,
+      color: formValue.color || null
+    };
+  }
+
+  private toPayloadFromTask(task: Task) {
+    return {
+      title: task.title,
+      description: task.description ?? null,
+      completed: task.completed,
+      priority: this.taskPriority(task),
+      dueDate: task.dueDate ?? null,
+      projectId: task.project?.id ?? null,
+      labelIds: task.labels?.map((label) => label.id) ?? [],
+      color: task.color ?? null
+    };
+  }
+
+  private loadSubtasks(taskId: number): void {
+    this.subtaskService.getSubtasks(taskId).subscribe({
+      next: (subtasks) => {
+        this.setSubtasks(taskId, subtasks);
+      },
+      error: () => {
+        this.toastService.show('Не удалось загрузить подзадачи', 'error');
+      }
+    });
+  }
+
+  private setSubtasks(taskId: number, subtasks: Subtask[]): void {
+    this.subtasksByTaskId = {
+      ...this.subtasksByTaskId,
+      [taskId]: subtasks
+    };
+
+    const completed = subtasks.filter((subtask) => subtask.completed).length;
+    this.tasks = this.tasks.map((task) =>
+      task.id === taskId
+        ? {
+            ...task,
+            subtaskTotal: subtasks.length,
+            subtaskCompleted: completed
+          }
+        : task
+    );
+  }
+
+  private selectValue(event: Event): string {
+    const target = event.target;
+
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) {
+      return target.value;
+    }
+
+    return '';
   }
 
   private get normalizedSearchQuery(): string {

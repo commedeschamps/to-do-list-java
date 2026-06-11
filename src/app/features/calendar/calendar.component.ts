@@ -10,7 +10,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import { finalize } from 'rxjs';
 
 import { TaskService } from '../../core/services/task.service';
-import { Task, TaskPriority } from '../../shared/models/task.model';
+import { Task, TaskPayload, TaskPriority } from '../../shared/models/task.model';
 import { ToastService } from '../../shared/ui/toast/toast.service';
 
 @Component({
@@ -33,10 +33,10 @@ export class CalendarComponent implements OnInit {
 
   readonly taskForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
-    description: ['', Validators.required],
+    description: [''],
     completed: [false],
     priority: ['medium' as TaskPriority, Validators.required],
-    dueDate: ['', Validators.required]
+    dueDate: ['']
   });
 
   calendarOptions: CalendarOptions = {
@@ -136,10 +136,10 @@ export class CalendarComponent implements OnInit {
     this.formErrorMessage = '';
     this.taskForm.reset({
       title: task.title,
-      description: task.description,
+      description: task.description ?? '',
       completed: task.completed,
       priority: this.taskPriority(task),
-      dueDate: task.dueDate ?? this.todayDateString()
+      dueDate: task.dueDate ?? ''
     });
     this.isModalOpen = true;
   }
@@ -158,7 +158,7 @@ export class CalendarComponent implements OnInit {
       return;
     }
 
-    const payload = this.taskForm.getRawValue();
+    const payload = this.toPayload();
     this.isSaving = true;
 
     if (this.editingTask) {
@@ -195,6 +195,30 @@ export class CalendarComponent implements OnInit {
       });
   }
 
+  deleteTask(): void {
+    if (!this.editingTask) {
+      return;
+    }
+
+    const task = this.editingTask;
+    this.isSaving = true;
+
+    this.taskService
+      .deleteTask(task.id)
+      .pipe(finalize(() => (this.isSaving = false)))
+      .subscribe({
+        next: () => {
+          this.setTasks(this.tasks.filter((item) => item.id !== task.id));
+          this.closeModal();
+          this.toastService.show('Задача удалена', 'success');
+        },
+        error: () => {
+          this.formErrorMessage = 'Не удалось удалить задачу.';
+          this.toastService.show('Не удалось удалить задачу', 'error');
+        }
+      });
+  }
+
   setPriority(priority: TaskPriority): void {
     this.taskForm.controls.priority.setValue(priority);
   }
@@ -220,14 +244,16 @@ export class CalendarComponent implements OnInit {
 
   private refreshEvents(): void {
     const events: EventInput[] = this.tasks
-      .filter((task) => task.dueDate)
+      .filter((task) => !!task.dueDate)
       .map((task) => ({
         id: String(task.id),
         title: task.title,
         start: task.dueDate ?? undefined,
+        allDay: true,
         backgroundColor: this.eventColor(task),
         borderColor: this.eventBorderColor(task),
         textColor: '#ffffff',
+        extendedProps: { task },
         classNames: task.completed ? ['calendar-event--completed'] : []
       }));
 
@@ -257,6 +283,21 @@ export class CalendarComponent implements OnInit {
 
   private eventBorderColor(task: Task): string {
     return task.completed ? '#16a34a' : this.eventColor(task);
+  }
+
+  private toPayload(): TaskPayload {
+    const value = this.taskForm.getRawValue();
+
+    return {
+      title: value.title,
+      description: value.description || null,
+      completed: value.completed,
+      priority: value.priority,
+      dueDate: value.dueDate || null,
+      projectId: this.editingTask?.project?.id ?? null,
+      labelIds: this.editingTask?.labels?.map((label) => label.id) ?? [],
+      color: this.editingTask?.color ?? null
+    };
   }
 
   private normalizePriority(priority: TaskPriority | string | undefined): TaskPriority {

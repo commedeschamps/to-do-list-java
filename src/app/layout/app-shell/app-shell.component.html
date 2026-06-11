@@ -111,6 +111,29 @@
         </span>
         <span>Статистика</span>
       </a>
+
+      <section class="sidebar-projects" aria-label="Проекты">
+        <div class="sidebar-projects__header">
+          <span>Проекты</span>
+        </div>
+        @if (projects.length) {
+          <div class="sidebar-projects__list">
+            @for (project of projects; track project.id) {
+              <a
+                class="sidebar-project"
+                routerLink="/tasks"
+                [queryParams]="{ project: project.id }"
+                (click)="closeSidebar()"
+              >
+                <span class="sidebar-project__dot" [style.background]="project.color" aria-hidden="true"></span>
+                <span>{{ project.name }}</span>
+              </a>
+            }
+          </div>
+        } @else {
+          <p class="sidebar-projects__empty">Проектов пока нет</p>
+        }
+      </section>
     </nav>
 
     <footer class="sidebar-footer">

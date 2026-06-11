@@ -43,6 +43,26 @@
         <p class="stat-card__value">{{ highPriorityCount }}</p>
         <p class="stat-card__hint">важные задачи</p>
       </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Просроченные</p>
+        <p class="stat-card__value">{{ overdueCount }}</p>
+        <p class="stat-card__hint">нужно разобрать</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">На сегодня</p>
+        <p class="stat-card__value">{{ todayCount }}</p>
+        <p class="stat-card__hint">с дедлайном сегодня</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Без дедлайна</p>
+        <p class="stat-card__value">{{ noDeadlineCount }}</p>
+        <p class="stat-card__hint">можно спланировать</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-card__label">Процент выполнения</p>
+        <p class="stat-card__value">{{ progressPercent }}%</p>
+        <p class="stat-card__hint">общий прогресс</p>
+      </article>
     </section>
 
     <section class="tasks-progress" aria-label="Прогресс выполнения">
@@ -78,10 +98,20 @@
       <article class="chart-card">
         <header class="chart-card__header">
           <h2>Распределение по приоритетам</h2>
-          <p>Задачи по уровню важности.</p>
+          <p>Активные задачи по уровню важности.</p>
         </header>
         <div class="chart-card__body">
           <canvas baseChart [type]="'bar'" [data]="priorityChartData" [options]="barOptions"></canvas>
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <header class="chart-card__header">
+          <h2>Задачи по проектам</h2>
+          <p>{{ hasProjectData ? 'Распределение задач между проектами.' : 'Создайте проекты, чтобы увидеть распределение задач.' }}</p>
+        </header>
+        <div class="chart-card__body">
+          <canvas baseChart [type]="'bar'" [data]="projectChartData" [options]="barOptions"></canvas>
         </div>
       </article>
 
@@ -94,6 +124,15 @@
           <canvas baseChart [type]="'line'" [data]="completedWeeklyChartData" [options]="lineOptions"></canvas>
         </div>
       </article>
+    </section>
+
+    <section class="stats-insights" aria-label="Выводы по задачам">
+      <h2>Что важно сейчас</h2>
+      <div class="stats-insights__list">
+        @for (insight of insights; track insight) {
+          <p>{{ insight }}</p>
+        }
+      </div>
     </section>
   }
 </section>

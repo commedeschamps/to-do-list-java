@@ -159,6 +159,56 @@
             </button>
           }
         </div>
+
+        <div class="tasks-advanced-filters" aria-label="Дополнительные фильтры">
+          <label>
+            <span>Проект</span>
+            <select [value]="activeProjectId" (change)="setProjectFilter($event)">
+              <option value="all">Все проекты</option>
+              @for (project of projects; track project.id) {
+                <option [value]="project.id">{{ project.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Метка</span>
+            <select [value]="activeLabelId" (change)="setLabelFilter($event)">
+              <option value="all">Все метки</option>
+              @for (label of labels; track label.id) {
+                <option [value]="label.id">{{ label.name }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Приоритет</span>
+            <select [value]="activePriority" (change)="setPriorityFilter($event)">
+              <option value="all">Любой</option>
+              @for (priority of priorities; track priority.value) {
+                <option [value]="priority.value">{{ priority.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Дата</span>
+            <select [value]="activeDateFilter" (change)="setDateFilter($event)">
+              @for (filter of dateFilters; track filter.value) {
+                <option [value]="filter.value">{{ filter.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Сортировка</span>
+            <select [value]="sortMode" (change)="setSortMode($event)">
+              @for (option of sortOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -236,11 +286,8 @@
                     class="inline-textarea"
                     rows="3"
                     formControlName="description"
-                    placeholder="Описание задачи"
+                    placeholder="Добавьте описание, если нужно"
                   ></textarea>
-                  @if (editForm.controls.description.touched && editForm.controls.description.invalid) {
-                    <small class="form-error">Описание обязательно.</small>
-                  }
 
                   <label class="sr-only" for="edit-due-date-{{ task.id }}">Дедлайн</label>
                   <input
@@ -250,6 +297,83 @@
                     formControlName="dueDate"
                     aria-label="Дедлайн"
                   >
+
+                  <div class="inline-edit-grid">
+                    <label>
+                      <span>Проект</span>
+                      <select class="inline-input" formControlName="projectId">
+                        <option [ngValue]="0">Без проекта</option>
+                        @for (project of projects; track project.id) {
+                          <option [ngValue]="project.id">{{ project.name }}</option>
+                        }
+                      </select>
+                    </label>
+
+                    <label>
+                      <span>Цвет задачи</span>
+                      <input class="inline-input" type="color" formControlName="color" aria-label="Цвет задачи">
+                    </label>
+                  </div>
+
+                  <section class="task-form-section" aria-label="Метки задачи">
+                    <div class="task-form-section__header">
+                      <span>Метки</span>
+                      @if (!labels.length) {
+                        <small>Меток пока нет</small>
+                      }
+                    </div>
+                    <div class="label-picker">
+                      @for (label of labels; track label.id) {
+                        <button
+                          type="button"
+                          class="label-chip label-chip--button"
+                          [class.label-chip--selected]="isLabelSelected('edit', label.id)"
+                          [style.--label-color]="label.color"
+                          (click)="toggleLabel('edit', label.id)"
+                        >
+                          {{ label.name }}
+                        </button>
+                      }
+                    </div>
+                    <div class="quick-create-row">
+                      <input class="inline-input" type="text" placeholder="Новая метка" [formControl]="newLabelNameControl">
+                      <input class="color-input" type="color" [formControl]="newLabelColorControl" aria-label="Цвет метки">
+                      <button class="btn btn--secondary" type="button" [disabled]="isLabelSaving" (click)="createLabel('edit')">Добавить</button>
+                    </div>
+                  </section>
+
+                  <section class="task-form-section" aria-label="Подзадачи">
+                    <div class="task-form-section__header">
+                      <span>{{ subtaskProgressLabel(task) }}</span>
+                      @if (!subtasksFor(task).length) {
+                        <small>Подзадач пока нет</small>
+                      }
+                    </div>
+                    <div class="subtask-list">
+                      @for (subtask of subtasksFor(task); track subtask.id) {
+                        <div class="subtask-item">
+                          <label class="subtask-check">
+                            <input type="checkbox" [checked]="subtask.completed" (change)="toggleSubtask(task, subtask)">
+                            <span></span>
+                          </label>
+                          <input
+                            class="subtask-title-input"
+                            type="text"
+                            [value]="subtask.title"
+                            [class.subtask-title-input--completed]="subtask.completed"
+                            (change)="renameSubtask(task, subtask, $event)"
+                          >
+                          <button class="task-action task-action--danger" type="button" aria-label="Удалить подзадачу" (click)="deleteSubtask(task, subtask)">
+                            <img src="assets/sprites/trash-red.svg" alt="" aria-hidden="true">
+                          </button>
+                        </div>
+                      }
+                    </div>
+                    <div class="quick-create-row">
+                      <input class="inline-input" type="text" placeholder="Новая подзадача" [formControl]="subtaskTitleControl">
+                      <button class="btn btn--secondary" type="button" [disabled]="isSubtaskSaving" (click)="addSubtask(task)">Добавить</button>
+                    </div>
+                  </section>
 
                   @if (editErrorMessage) {
                     <small class="form-error">{{ editErrorMessage }}</small>
@@ -277,7 +401,7 @@
                 </div>
               </form>
             } @else {
-              <article class="task-item task-card" [class.completed]="task.completed">
+              <article class="task-item task-card" [class.completed]="task.completed" [style.--task-accent]="taskColor(task)">
                 <div class="task-card__check">
                   <button
                     class="status-toggle"
@@ -292,7 +416,22 @@
 
                 <div class="task-content task-card__content">
                   <h3 class="task-card__title">{{ task.title }}</h3>
-                  <p class="task-card__description">{{ task.description }}</p>
+                  @if (task.description) {
+                    <p class="task-card__description">{{ task.description }}</p>
+                  }
+                  <div class="task-card__taxonomy">
+                    @if (task.project; as project) {
+                      <span class="project-badge" [style.--project-color]="projectColor(project)">
+                        {{ project.name }}
+                      </span>
+                    }
+                    @for (label of visibleLabels(task); track label.id) {
+                      <span class="label-chip" [style.--label-color]="label.color">{{ label.name }}</span>
+                    }
+                    @if (extraLabelsCount(task)) {
+                      <span class="label-chip label-chip--more">+{{ extraLabelsCount(task) }}</span>
+                    }
+                  </div>
                 </div>
 
                 <div class="task-card__meta">
@@ -305,6 +444,9 @@
                   <span class="due-date-badge" [ngClass]="dueDateClass(task)">
                     {{ dueDateLabel(task) }}
                   </span>
+                  @if (hasSubtasks(task)) {
+                    <span class="subtask-progress-badge">{{ subtaskProgressLabel(task) }}</span>
+                  }
                 </div>
 
                 <div class="task-actions task-card__actions">
@@ -374,17 +516,72 @@
             id="task-description"
             rows="5"
             formControlName="description"
-            placeholder="Добавьте детали задачи"
+            placeholder="Добавьте описание, если нужно"
           ></textarea>
-          @if (taskForm.controls.description.touched && taskForm.controls.description.invalid) {
-            <small class="form-error">Описание обязательно.</small>
-          }
         </div>
 
         <div class="form-field">
           <label for="task-due-date">Дедлайн</label>
           <input id="task-due-date" type="date" formControlName="dueDate">
         </div>
+
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="task-project">Проект</label>
+            <select id="task-project" formControlName="projectId">
+              <option [ngValue]="0">Без проекта</option>
+              @for (project of projects; track project.id) {
+                <option [ngValue]="project.id">{{ project.name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="task-color">Цвет задачи</label>
+            <input id="task-color" type="color" formControlName="color" aria-label="Цвет задачи">
+          </div>
+        </div>
+
+        <section class="task-form-section" aria-label="Создание проекта">
+          <div class="task-form-section__header">
+            <span>Проекты</span>
+            @if (!projects.length) {
+              <small>Проектов пока нет</small>
+            }
+          </div>
+          <div class="quick-create-row">
+            <input type="text" placeholder="Новый проект" [formControl]="newProjectNameControl">
+            <input class="color-input" type="color" [formControl]="newProjectColorControl" aria-label="Цвет проекта">
+            <button class="btn btn--secondary" type="button" [disabled]="isProjectSaving" (click)="createProject('create')">Добавить</button>
+          </div>
+        </section>
+
+        <section class="task-form-section" aria-label="Метки задачи">
+          <div class="task-form-section__header">
+            <span>Метки</span>
+            @if (!labels.length) {
+              <small>Меток пока нет</small>
+            }
+          </div>
+          <div class="label-picker">
+            @for (label of labels; track label.id) {
+              <button
+                type="button"
+                class="label-chip label-chip--button"
+                [class.label-chip--selected]="isLabelSelected('create', label.id)"
+                [style.--label-color]="label.color"
+                (click)="toggleLabel('create', label.id)"
+              >
+                {{ label.name }}
+              </button>
+            }
+          </div>
+          <div class="quick-create-row">
+            <input type="text" placeholder="Новая метка" [formControl]="newLabelNameControl">
+            <input class="color-input" type="color" [formControl]="newLabelColorControl" aria-label="Цвет метки">
+            <button class="btn btn--secondary" type="button" [disabled]="isLabelSaving" (click)="createLabel('create')">Добавить</button>
+          </div>
+        </section>
 
         <div class="form-field">
           <span class="field-label">Приоритет</span>
