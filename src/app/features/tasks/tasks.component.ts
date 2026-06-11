@@ -106,6 +106,8 @@ export class TasksComponent implements OnInit, OnDestroy {
     { label: 'Высокий', value: 'high' }
   ];
 
+  readonly colorPresets = ['#3B82F6', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6'];
+
   readonly skeletonItems = [0, 1, 2];
   readonly statSkeletonItems = [0, 1, 2, 3];
 
@@ -143,6 +145,8 @@ export class TasksComponent implements OnInit, OnDestroy {
   isProjectSaving = false;
   isLabelSaving = false;
   isCreateModalOpen = false;
+  isCreateProjectOpen = false;
+  isCreateLabelOpen = false;
   formErrorMessage = '';
   editErrorMessage = '';
   listErrorMessage = '';
@@ -341,6 +345,10 @@ export class TasksComponent implements OnInit, OnDestroy {
       labelIds: [],
       color: '#3B82F6'
     });
+    this.isCreateProjectOpen = false;
+    this.isCreateLabelOpen = false;
+    this.newProjectNameControl.setValue('');
+    this.newLabelNameControl.setValue('');
     this.isCreateModalOpen = true;
     window.setTimeout(() => this.focusFirstControl(this.createModalPanel), 0);
   }
@@ -348,6 +356,8 @@ export class TasksComponent implements OnInit, OnDestroy {
   closeCreateModal(): void {
     this.isCreateModalOpen = false;
     this.formErrorMessage = '';
+    this.isCreateProjectOpen = false;
+    this.isCreateLabelOpen = false;
     this.createModalTrigger?.focus();
     this.createModalTrigger = null;
   }
@@ -519,6 +529,7 @@ export class TasksComponent implements OnInit, OnDestroy {
           const targetControl = control === 'create' ? this.taskForm.controls.projectId : this.editForm.controls.projectId;
           targetControl.setValue(project.id);
           this.newProjectNameControl.setValue('');
+          this.isCreateProjectOpen = false;
           this.toastService.show('Проект создан', 'success');
         },
         error: () => {
@@ -545,6 +556,7 @@ export class TasksComponent implements OnInit, OnDestroy {
           const targetControl = control === 'create' ? this.taskForm.controls.labelIds : this.editForm.controls.labelIds;
           targetControl.setValue([...targetControl.value, label.id]);
           this.newLabelNameControl.setValue('');
+          this.isCreateLabelOpen = false;
           this.toastService.show('Метка создана', 'success');
         },
         error: () => {
@@ -708,6 +720,22 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   setEditPriority(priority: TaskPriority): void {
     this.editForm.controls.priority.setValue(priority);
+  }
+
+  setCreateColor(color: string): void {
+    this.taskForm.controls.color.setValue(color);
+  }
+
+  setEditColor(color: string): void {
+    this.editForm.controls.color.setValue(color);
+  }
+
+  toggleProjectCreator(): void {
+    this.isCreateProjectOpen = !this.isCreateProjectOpen;
+  }
+
+  toggleLabelCreator(): void {
+    this.isCreateLabelOpen = !this.isCreateLabelOpen;
   }
 
   taskPriority(task: Task): TaskPriority {

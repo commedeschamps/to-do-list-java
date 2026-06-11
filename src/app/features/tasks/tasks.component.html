@@ -491,129 +491,159 @@
       <header class="task-modal__header">
         <div>
           <h2 id="task-modal-title" class="task-modal__title">Новая задача</h2>
-          <p class="task-modal__subtitle">Создайте задачу, задайте приоритет и статус.</p>
+          <p class="task-modal__subtitle">Добавьте главное сейчас, детали можно уточнить позже.</p>
         </div>
         <button class="modal-close" type="button" aria-label="Закрыть окно" (click)="closeCreateModal()">×</button>
       </header>
 
-      <form class="task-modal__body" [formGroup]="taskForm" (ngSubmit)="submitTask()" novalidate>
-        <div class="form-field">
-          <label for="task-title">Название</label>
-          <input
-            id="task-title"
-            type="text"
-            formControlName="title"
-            placeholder="Например: Купить продукты"
-          >
-          @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
-            <small class="form-error">Название обязательно.</small>
+      <form class="task-modal__form" [formGroup]="taskForm" (ngSubmit)="submitTask()" novalidate>
+        <div class="task-modal__body">
+          <section class="task-form-section task-form-section--main" aria-labelledby="create-main-section">
+            <h3 id="create-main-section" class="task-form-section__title">Основное</h3>
+
+            <div class="form-field">
+              <label for="task-title">Название <span aria-hidden="true">*</span></label>
+              <input
+                id="task-title"
+                type="text"
+                formControlName="title"
+                placeholder="Например: Купить продукты"
+              >
+              @if (taskForm.controls.title.touched && taskForm.controls.title.invalid) {
+                <small class="form-error">Название обязательно.</small>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="task-description">Описание</label>
+              <textarea
+                id="task-description"
+                rows="4"
+                formControlName="description"
+                placeholder="Добавьте детали, если нужно"
+              ></textarea>
+            </div>
+
+            <div class="form-field form-field--compact">
+              <label for="task-due-date">Дедлайн</label>
+              <input id="task-due-date" type="date" formControlName="dueDate">
+            </div>
+          </section>
+
+          <section class="task-form-section" aria-labelledby="create-organization-section">
+            <h3 id="create-organization-section" class="task-form-section__title">Организация</h3>
+
+            <div class="organization-row">
+              <div class="form-field">
+                <label for="task-project">Проект</label>
+                <select id="task-project" formControlName="projectId">
+                  <option [ngValue]="0">Без проекта</option>
+                  @for (project of projects; track project.id) {
+                    <option [ngValue]="project.id">{{ project.name }}</option>
+                  }
+                </select>
+                @if (!projects.length) {
+                  <small class="field-hint">Пока нет проектов</small>
+                }
+              </div>
+
+              <button class="btn btn--secondary btn--compact" type="button" (click)="toggleProjectCreator()">
+                + Новый проект
+              </button>
+            </div>
+
+            @if (isCreateProjectOpen) {
+              <div class="compact-create-row">
+                <input type="text" placeholder="Название проекта" [formControl]="newProjectNameControl">
+                <input class="color-input" type="color" [formControl]="newProjectColorControl" aria-label="Цвет проекта">
+                <button class="btn btn--primary btn--compact" type="button" [disabled]="isProjectSaving" (click)="createProject('create')">
+                  {{ isProjectSaving ? 'Создаем...' : 'Создать' }}
+                </button>
+              </div>
+            }
+
+            <div class="organization-block">
+              <div class="organization-block__header">
+                <label>Метки</label>
+                <button class="btn btn--secondary btn--compact" type="button" (click)="toggleLabelCreator()">
+                  + Новая метка
+                </button>
+              </div>
+
+              @if (labels.length) {
+                <div class="label-picker">
+                  @for (label of labels; track label.id) {
+                    <button
+                      type="button"
+                      class="label-chip label-chip--button"
+                      [class.label-chip--selected]="isLabelSelected('create', label.id)"
+                      [style.--label-color]="label.color"
+                      (click)="toggleLabel('create', label.id)"
+                    >
+                      {{ label.name }}
+                    </button>
+                  }
+                </div>
+              } @else {
+                <p class="field-hint">Пока нет меток</p>
+              }
+
+              @if (isCreateLabelOpen) {
+                <div class="compact-create-row">
+                  <input type="text" placeholder="Название метки" [formControl]="newLabelNameControl">
+                  <input class="color-input" type="color" [formControl]="newLabelColorControl" aria-label="Цвет метки">
+                  <button class="btn btn--primary btn--compact" type="button" [disabled]="isLabelSaving" (click)="createLabel('create')">
+                    {{ isLabelSaving ? 'Создаем...' : 'Создать' }}
+                  </button>
+                </div>
+              }
+            </div>
+
+            <div class="color-picker-row">
+              <span class="field-label">Цвет</span>
+              <div class="color-presets" role="group" aria-label="Цвет задачи">
+                @for (color of colorPresets; track color) {
+                  <button
+                    class="color-dot"
+                    type="button"
+                    [class.color-dot--active]="taskForm.controls.color.value === color"
+                    [style.background]="color"
+                    [attr.aria-label]="'Выбрать цвет ' + color"
+                    (click)="setCreateColor(color)"
+                  ></button>
+                }
+                <input class="color-input color-input--inline" type="color" formControlName="color" aria-label="Другой цвет">
+              </div>
+            </div>
+          </section>
+
+          <section class="task-form-section task-form-section--priority" aria-labelledby="create-priority-section">
+            <h3 id="create-priority-section" class="task-form-section__title">Приоритет</h3>
+            <div class="priority-control" role="group" aria-label="Приоритет задачи">
+              @for (priority of priorities; track priority.value) {
+                <button
+                  type="button"
+                  class="priority-option"
+                  [class.priority-option--active]="taskForm.controls.priority.value === priority.value"
+                  (click)="setCreatePriority(priority.value)"
+                >
+                  {{ priority.label }}
+                </button>
+              }
+            </div>
+          </section>
+
+          @if (formErrorMessage) {
+            <div class="form-error form-error--panel">{{ formErrorMessage }}</div>
           }
         </div>
 
-        <div class="form-field">
-          <label for="task-description">Описание</label>
-          <textarea
-            id="task-description"
-            rows="5"
-            formControlName="description"
-            placeholder="Добавьте описание, если нужно"
-          ></textarea>
-        </div>
-
-        <div class="form-field">
-          <label for="task-due-date">Дедлайн</label>
-          <input id="task-due-date" type="date" formControlName="dueDate">
-        </div>
-
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="task-project">Проект</label>
-            <select id="task-project" formControlName="projectId">
-              <option [ngValue]="0">Без проекта</option>
-              @for (project of projects; track project.id) {
-                <option [ngValue]="project.id">{{ project.name }}</option>
-              }
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label for="task-color">Цвет задачи</label>
-            <input id="task-color" type="color" formControlName="color" aria-label="Цвет задачи">
-          </div>
-        </div>
-
-        <section class="task-form-section" aria-label="Создание проекта">
-          <div class="task-form-section__header">
-            <span>Проекты</span>
-            @if (!projects.length) {
-              <small>Проектов пока нет</small>
-            }
-          </div>
-          <div class="quick-create-row">
-            <input type="text" placeholder="Новый проект" [formControl]="newProjectNameControl">
-            <input class="color-input" type="color" [formControl]="newProjectColorControl" aria-label="Цвет проекта">
-            <button class="btn btn--secondary" type="button" [disabled]="isProjectSaving" (click)="createProject('create')">Добавить</button>
-          </div>
-        </section>
-
-        <section class="task-form-section" aria-label="Метки задачи">
-          <div class="task-form-section__header">
-            <span>Метки</span>
-            @if (!labels.length) {
-              <small>Меток пока нет</small>
-            }
-          </div>
-          <div class="label-picker">
-            @for (label of labels; track label.id) {
-              <button
-                type="button"
-                class="label-chip label-chip--button"
-                [class.label-chip--selected]="isLabelSelected('create', label.id)"
-                [style.--label-color]="label.color"
-                (click)="toggleLabel('create', label.id)"
-              >
-                {{ label.name }}
-              </button>
-            }
-          </div>
-          <div class="quick-create-row">
-            <input type="text" placeholder="Новая метка" [formControl]="newLabelNameControl">
-            <input class="color-input" type="color" [formControl]="newLabelColorControl" aria-label="Цвет метки">
-            <button class="btn btn--secondary" type="button" [disabled]="isLabelSaving" (click)="createLabel('create')">Добавить</button>
-          </div>
-        </section>
-
-        <div class="form-field">
-          <span class="field-label">Приоритет</span>
-          <div class="priority-control" role="group" aria-label="Приоритет задачи">
-            @for (priority of priorities; track priority.value) {
-              <button
-                type="button"
-                class="priority-option"
-                [class.priority-option--active]="taskForm.controls.priority.value === priority.value"
-                (click)="setCreatePriority(priority.value)"
-              >
-                {{ priority.label }}
-              </button>
-            }
-          </div>
-        </div>
-
-        <label class="modal-checkbox">
-          <input type="checkbox" formControlName="completed">
-          <span>Выполнена</span>
-        </label>
-
-        @if (formErrorMessage) {
-          <div class="form-error form-error--panel">{{ formErrorMessage }}</div>
-        }
-
-        <div class="task-modal__actions">
+        <footer class="task-modal__footer">
           <button class="btn btn--secondary" type="button" (click)="closeCreateModal()">Отмена</button>
           <button class="btn btn--primary" type="submit" [disabled]="isSaving">
             {{ isSaving ? 'Создаем...' : 'Создать' }}
           </button>
-        </div>
+        </footer>
       </form>
     </section>
   </div>
