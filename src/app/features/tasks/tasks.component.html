@@ -1,9 +1,18 @@
 <section class="tasks-page">
   <section class="tasks-hero">
     <div>
-      <p class="eyebrow">Панель задач</p>
-      <h2>Добрый день!</h2>
-      <p>Создавайте задачи, меняйте статусы и держите фокус на главном.</p>
+      <h2>Задачи</h2>
+      <p class="tasks-summary">{{ summaryLabel }}</p>
+      <div
+        class="tasks-summary__progress"
+        role="progressbar"
+        [attr.aria-valuenow]="progressPercent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-label="Прогресс выполнения"
+      >
+        <span [style.width.%]="progressPercent"></span>
+      </div>
     </div>
 
     <button class="btn btn--primary tasks-hero__action" type="button" [disabled]="isSaving" (click)="openCreateModal($event)">
@@ -13,9 +22,100 @@
           <path d="M5 12h14" />
         </svg>
       </span>
-      <span>Добавить задачу</span>
+      <span>Новая задача</span>
     </button>
   </section>
+
+  <form class="quick-add" (submit)="quickAddTask(); $event.preventDefault()">
+    <span class="quick-add__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
+    </span>
+    <label class="sr-only" for="quick-add-title">Быстро добавить задачу</label>
+    <input
+      id="quick-add-title"
+      type="text"
+      autocomplete="off"
+      [formControl]="quickAddControl"
+      placeholder="Быстро добавить задачу…"
+    >
+    <button type="submit" [disabled]="isSaving || !quickAddControl.value.trim()" aria-label="Добавить задачу">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+  </form>
+
+  <section class="task-viewbar" aria-label="Управление списком задач">
+    <div class="task-tabs" role="tablist" aria-label="Представление задач">
+      @for (view of taskViews; track view.value) {
+        <button
+          type="button"
+          role="tab"
+          [attr.aria-selected]="activeTaskView === view.value"
+          [class.active]="activeTaskView === view.value"
+          (click)="setTaskView(view.value)"
+        >{{ view.label }}</button>
+      }
+    </div>
+
+    <div class="task-viewbar__tools">
+      <label class="compact-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+        <span class="sr-only">Поиск задач</span>
+        <input type="search" placeholder="Поиск" [formControl]="searchControl">
+      </label>
+      <button
+        class="toolbar-button"
+        type="button"
+        [class.active]="isFiltersOpen"
+        [attr.aria-expanded]="isFiltersOpen"
+        (click)="toggleFilters()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
+        <span>Фильтр</span>
+      </button>
+      <label class="toolbar-select">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h8M8 18h4M4 4v16" /></svg>
+        <span class="sr-only">Сортировка</span>
+        <select [value]="sortMode" (change)="setSortMode($event)" aria-label="Сортировка">
+          @for (option of sortOptions; track option.value) {
+            <option [value]="option.value">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  </section>
+
+  @if (isFiltersOpen) {
+    <section class="filter-popover" aria-label="Дополнительные фильтры">
+      <label>
+        <span>Проект</span>
+        <select [value]="activeProjectId" (change)="setProjectFilter($event)">
+          <option value="all">Все проекты</option>
+          @for (project of projects; track project.id) { <option [value]="project.id">{{ project.name }}</option> }
+        </select>
+      </label>
+      <label>
+        <span>Метка</span>
+        <select [value]="activeLabelId" (change)="setLabelFilter($event)">
+          <option value="all">Все метки</option>
+          @for (label of labels; track label.id) { <option [value]="label.id">{{ label.name }}</option> }
+        </select>
+      </label>
+      <label>
+        <span>Приоритет</span>
+        <select [value]="activePriority" (change)="setPriorityFilter($event)">
+          <option value="all">Любой</option>
+          @for (priority of priorities; track priority.value) { <option [value]="priority.value">{{ priority.label }}</option> }
+        </select>
+      </label>
+      <label>
+        <span>Дата</span>
+        <select [value]="activeDateFilter" (change)="setDateFilter($event)">
+          @for (filter of dateFilters; track filter.value) { <option [value]="filter.value">{{ filter.label }}</option> }
+        </select>
+      </label>
+      <button class="filter-popover__reset" type="button" (click)="clearAdvancedFilters()">Сбросить</button>
+    </section>
+  }
 
   @if (isLoading) {
     <div class="tasks-stats" aria-hidden="true">
@@ -122,10 +222,113 @@
     </section>
   }
 
+  <section class="ai-workbench" aria-label="AI-помощник по задачам" hidden>
+    <article class="ai-panel ai-panel--ask">
+      <header class="ai-panel__header">
+        <div>
+          <p class="eyebrow">AI-помощник</p>
+          <h2>Спросить по задачам</h2>
+          <p>{{ aiEnabled ? 'AI отвечает только по вашим задачам.' : aiStatusMessage }}</p>
+        </div>
+      </header>
+
+      <div class="ai-ask-row">
+        <label class="sr-only" for="ai-question">Вопрос по задачам</label>
+        <input
+          id="ai-question"
+          class="inline-input"
+          type="text"
+          [formControl]="aiQuestionControl"
+          placeholder="Что у меня срочное на этой неделе?"
+        >
+        <button class="btn btn--primary" type="button" [disabled]="!aiEnabled || isAiAskLoading || !aiQuestionControl.value.trim()" (click)="askTasks()">
+          {{ isAiAskLoading ? 'Думаем...' : 'Спросить' }}
+        </button>
+      </div>
+
+      <div class="ai-question-chips" aria-label="Примеры вопросов">
+        @for (question of aiQuestionExamples; track question) {
+          <button type="button" (click)="useAiQuestion(question)">{{ question }}</button>
+        }
+      </div>
+
+      @if (aiAskErrorMessage) {
+        <div class="server-error list-error">{{ aiAskErrorMessage }}</div>
+      }
+
+      @if (aiAskResponse; as answer) {
+        <div class="ai-answer">
+          <p>{{ answer.answer }}</p>
+          @if (answer.relatedTaskIds.length) {
+            <div class="ai-related">
+              <span>Связанные задачи</span>
+              @for (task of relatedTasks(answer.relatedTaskIds); track task.id) {
+                <button type="button" (click)="focusTask(task.id)">{{ task.title }}</button>
+              }
+            </div>
+          }
+          @if (answer.suggestedActions.length) {
+            <div class="ai-actions-list">
+              @for (action of answer.suggestedActions; track action) {
+                <p>{{ action }}</p>
+              }
+            </div>
+          }
+        </div>
+      }
+    </article>
+
+    <article class="ai-panel">
+      <header class="ai-panel__header ai-panel__header--split">
+        <div>
+          <p class="eyebrow">AI-помощник</p>
+          <h2>Навести порядок с AI</h2>
+          <p>{{ aiEnabled ? 'AI предложит изменения, но ничего не применит сам.' : aiStatusMessage }}</p>
+        </div>
+        <button class="btn btn--primary" type="button" [disabled]="!aiEnabled || isAiCleanupLoading || !tasks.length" (click)="getCleanupSuggestions()">
+          {{ isAiCleanupLoading ? 'Ищем...' : 'Навести порядок' }}
+        </button>
+      </header>
+
+      @if (!tasks.length && !isLoading) {
+        <p class="ai-panel__empty">Добавьте задачи, чтобы получить предложения.</p>
+      }
+
+      @if (aiCleanupErrorMessage) {
+        <div class="server-error list-error">{{ aiCleanupErrorMessage }}</div>
+      }
+
+      @if (cleanupSuggestions.length) {
+        <div class="cleanup-list">
+          @for (suggestion of cleanupSuggestions; track suggestion.localId) {
+            <section class="cleanup-card">
+              <div>
+                <span class="cleanup-card__task">{{ cleanupTaskTitle(suggestion.taskId) }}</span>
+                <h3>{{ suggestion.title }}</h3>
+                <p>{{ suggestion.description }}</p>
+                <div class="cleanup-preview" aria-label="Предпросмотр изменений">
+                  @for (item of cleanupPreview(suggestion); track item) {
+                    <span>{{ item }}</span>
+                  }
+                </div>
+              </div>
+              <div class="cleanup-card__actions">
+                <button class="btn btn--primary" type="button" [disabled]="cleanupApplyingId === suggestion.localId" (click)="applyCleanupSuggestion(suggestion)">
+                  {{ cleanupApplyingId === suggestion.localId ? 'Применяем...' : 'Применить' }}
+                </button>
+                <button class="btn btn--secondary" type="button" (click)="dismissCleanupSuggestion(suggestion)">Отклонить</button>
+              </div>
+            </section>
+          }
+        </div>
+      }
+    </article>
+  </section>
+
   <section class="task-list tasks-panel" aria-labelledby="task-list-title" [attr.aria-busy]="isLoading">
     <div class="tasks-panel__header">
       <div class="tasks-list__title-block">
-        <h2 id="task-list-title">Список задач</h2>
+        <h2 id="task-list-title">Мои задачи</h2>
         <span class="count-label">{{ visibleTasks.length }} из {{ totalCount }}</span>
       </div>
 
@@ -401,7 +604,12 @@
                 </div>
               </form>
             } @else {
-              <article class="task-item task-card" [class.completed]="task.completed" [style.--task-accent]="taskColor(task)">
+              <article
+                class="task-item task-card"
+                [attr.id]="'task-' + task.id"
+                [class.completed]="task.completed"
+                [style.--task-accent]="taskColor(task)"
+              >
                 <div class="task-card__check">
                   <button
                     class="status-toggle"
@@ -530,8 +738,9 @@
             </div>
           </section>
 
-          <section class="task-form-section" aria-labelledby="create-organization-section">
-            <h3 id="create-organization-section" class="task-form-section__title">Организация</h3>
+          <details class="task-form-details">
+            <summary>Метки и дополнительные настройки</summary>
+            <div class="task-form-details__body">
 
             <div class="organization-row">
               <div class="form-field">
@@ -615,7 +824,8 @@
                 <input class="color-input color-input--inline" type="color" formControlName="color" aria-label="Другой цвет">
               </div>
             </div>
-          </section>
+            </div>
+          </details>
 
           <section class="task-form-section task-form-section--priority" aria-labelledby="create-priority-section">
             <h3 id="create-priority-section" class="task-form-section__title">Приоритет</h3>

@@ -27,7 +27,10 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
     private final String allowedOrigins;
 
-    public SecurityConfig(JwtFilter jwtFilter, @Value("${app.cors.allowed-origins:http://localhost:4200}") String allowedOrigins) {
+    public SecurityConfig(
+            JwtFilter jwtFilter,
+            @Value("${app.cors.allowed-origins:http://localhost:4200,https://to-do-list-java.vercel.app,https://todo.commedeschamps.dev}") String allowedOrigins
+    ) {
         this.jwtFilter = jwtFilter;
         this.allowedOrigins = allowedOrigins;
     }
@@ -46,7 +49,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers("/api/auth/me").authenticated()
+                        .requestMatchers("/api/auth/me", "/api/auth/me/profile").authenticated()
                         .requestMatchers("/api/tasks/**").authenticated()
                         .anyRequest().authenticated()
                 )

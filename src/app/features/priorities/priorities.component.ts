@@ -39,6 +39,14 @@ export class PrioritiesComponent implements OnInit {
     this.loadTasks();
   }
 
+  get activeCount(): number {
+    return this.tasks.filter((task) => !task.completed).length;
+  }
+
+  get activeHighPriorityCount(): number {
+    return this.tasks.filter((task) => !task.completed && this.taskPriority(task) === 'high').length;
+  }
+
   loadTasks(): void {
     this.isLoading = true;
     this.listErrorMessage = '';
@@ -129,6 +137,26 @@ export class PrioritiesComponent implements OnInit {
 
   priorityClass(priority: TaskPriority): string {
     return `priority-badge--${priority}`;
+  }
+
+  visibleLabels(task: Task) {
+    return (task.labels ?? []).slice(0, 2);
+  }
+
+  dueDateLabel(task: Task): string {
+    if (!task.dueDate) {
+      return 'Без даты';
+    }
+
+    const date = new Date(`${task.dueDate}T00:00:00`);
+    const today = new Date();
+    const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+
+    if (!task.completed && date.getTime() < todayKey) {
+      return 'Просрочено';
+    }
+
+    return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(date);
   }
 
   private withNormalizedPriority(task: Task): Task {

@@ -1,9 +1,8 @@
 <section class="tasks-page calendar-page">
   <section class="tasks-hero">
     <div>
-      <p class="eyebrow">Календарь</p>
-      <h2>План задач</h2>
-      <p>Смотрите задачи по датам, создавайте новые дедлайны и открывайте карточки прямо из календаря.</p>
+      <h2>Календарь</h2>
+      <p>{{ calendarTaskCount }} задач с дедлайном · планирование по дням и неделям</p>
     </div>
 
     <button class="btn btn--primary tasks-hero__action" type="button" (click)="openCreateModal()">
@@ -22,13 +21,6 @@
   }
 
   <section class="calendar-shell" [attr.aria-busy]="isLoading">
-    <div class="calendar-shell__header">
-      <div>
-        <h2>Календарь задач</h2>
-        <p>{{ calendarTaskCount }} задач с дедлайном</p>
-      </div>
-    </div>
-
     @if (isLoading) {
       <div class="calendar-loading" aria-hidden="true">
         <span class="skeleton calendar-loading__toolbar"></span>
@@ -36,6 +28,14 @@
       </div>
     } @else {
       <full-calendar [options]="calendarOptions" />
+
+      @if (calendarTaskCount) {
+        <div class="calendar-legend" aria-label="Легенда календаря">
+          <span><i class="calendar-legend__dot calendar-legend__dot--active"></i> Активные</span>
+          <span><i class="calendar-legend__dot calendar-legend__dot--important"></i> Высокий приоритет</span>
+          <span><i class="calendar-legend__dot calendar-legend__dot--done"></i> Выполненные</span>
+        </div>
+      }
 
       @if (!calendarTaskCount) {
         <div class="calendar-empty">

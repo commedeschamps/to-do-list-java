@@ -3,6 +3,7 @@ package com.example.todolist.controller;
 import com.example.todolist.dto.AuthResponse;
 import com.example.todolist.dto.CurrentUserResponse;
 import com.example.todolist.dto.LoginRequest;
+import com.example.todolist.dto.ProfileUpdateRequest;
 import com.example.todolist.dto.RegisterRequest;
 import com.example.todolist.entity.User;
 import com.example.todolist.security.JwtUtil;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 @RestController
 @RequestMapping("/api/auth")
@@ -49,12 +51,21 @@ public class AuthController {
         return ResponseEntity.ok(currentUserResponse(user));
     }
 
+    @PutMapping("/me/profile")
+    public ResponseEntity<CurrentUserResponse> updateProfile(
+            Authentication authentication,
+            @Valid @RequestBody ProfileUpdateRequest request
+    ) {
+        User user = userService.updateDisplayName(authentication.getName(), request.displayName());
+        return ResponseEntity.ok(currentUserResponse(user));
+    }
+
     private AuthResponse authResponse(User user) {
         String token = jwtUtil.generateToken(user.getUsername());
         return new AuthResponse(token, currentUserResponse(user));
     }
 
     private CurrentUserResponse currentUserResponse(User user) {
-        return new CurrentUserResponse(user.getId(), user.getUsername());
+        return new CurrentUserResponse(user.getId(), user.getUsername(), user.getDisplayName());
     }
 }

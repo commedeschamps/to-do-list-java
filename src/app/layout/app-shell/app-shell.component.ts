@@ -9,11 +9,12 @@ import { UserPreferences, UserPreferencesService } from '../../core/services/use
 import { CurrentUser } from '../../shared/models/auth.model';
 import { Project } from '../../shared/models/task.model';
 import { ToastContainerComponent } from '../../shared/ui/toast/toast-container.component';
+import { AiAssistantComponent } from '../../shared/ui/ai-assistant/ai-assistant.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive, RouterOutlet, ToastContainerComponent],
+  imports: [CommonModule, RouterLink, RouterLinkActive, RouterOutlet, AiAssistantComponent, ToastContainerComponent],
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss'
 })
@@ -97,19 +98,7 @@ export class AppShellComponent implements OnDestroy {
   }
 
   get profileName(): string {
-    const displayName = this.preferences.displayName.trim();
-
-    if (displayName) {
-      return displayName;
-    }
-
-    const username = this.currentUser?.username ?? this.authService.getUsername();
-
-    if (!username) {
-      return 'Пользователь';
-    }
-
-    return username;
+    return this.authService.getDisplayName(this.currentUser);
   }
 
   get profileInitial(): string {

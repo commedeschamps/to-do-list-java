@@ -1,9 +1,8 @@
 <section class="tasks-page">
   <section class="tasks-hero">
     <div>
-      <p class="eyebrow">Приоритеты</p>
-      <h2>Работа по важности</h2>
-      <p>Задачи сгруппированы по уровню приоритета, чтобы быстрее выбрать следующий шаг.</p>
+      <h2>Приоритеты</h2>
+      <p>{{ activeCount }} активных задач · {{ activeHighPriorityCount }} высокого приоритета</p>
     </div>
     <a class="btn btn--primary tasks-hero__action" routerLink="/tasks">
       <span class="btn__icon" aria-hidden="true">
@@ -20,15 +19,6 @@
     <div class="server-error list-error">{{ listErrorMessage }}</div>
   }
 
-  <section class="priority-summary" aria-label="Количество задач по приоритетам">
-    @for (group of groups; track trackByGroup($index, group)) {
-      <article class="priority-summary__card" [ngClass]="'priority-summary__card--' + group.value">
-        <span>{{ group.label }}</span>
-        <strong>{{ tasksByPriority(group.value).length }}</strong>
-      </article>
-    }
-  </section>
-
   <div class="priority-board" [attr.aria-busy]="isLoading">
     @for (group of groups; track trackByGroup($index, group)) {
       <section
@@ -38,7 +28,7 @@
       >
         <header class="priority-column__header">
           <div>
-            <h2 [id]="'priority-' + group.value">{{ group.label }} приоритет</h2>
+            <h2 [id]="'priority-' + group.value"><i aria-hidden="true"></i>{{ group.label }} <span>{{ tasksByPriority(group.value).length }}</span></h2>
             <p>{{ group.description }}</p>
           </div>
           <span class="priority-badge" [ngClass]="priorityClass(group.value)">
@@ -90,11 +80,13 @@
                   @if (task.description) {
                     <p class="task-card__description">{{ task.description }}</p>
                   }
+                  <div class="priority-task-card__taxonomy">
+                    @if (task.project; as project) { <span><i [style.background]="project.color"></i>{{ project.name }}</span> }
+                    @for (label of visibleLabels(task); track label.id) { <span>{{ label.name }}</span> }
+                  </div>
                 </div>
                 <div class="task-card__meta">
-                  <span class="priority-badge" [ngClass]="priorityClass(taskPriority(task))">
-                    {{ priorityLabel(taskPriority(task)) }}
-                  </span>
+                  <span class="priority-task-card__due">{{ dueDateLabel(task) }}</span>
                   <span class="status-badge" [class.done]="task.completed">
                     {{ task.completed ? 'Выполнена' : 'Активная' }}
                   </span>

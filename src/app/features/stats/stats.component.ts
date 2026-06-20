@@ -4,7 +4,9 @@ import { ChartData, ChartOptions } from 'chart.js';
 import { BaseChartDirective } from 'ng2-charts';
 import { finalize } from 'rxjs';
 
+import { AiService } from '../../core/services/ai.service';
 import { TaskService } from '../../core/services/task.service';
+import { AiRiskRadar, AiWeeklySummary } from '../../shared/models/ai.model';
 import { Task, TaskPriority } from '../../shared/models/task.model';
 import { ToastService } from '../../shared/ui/toast/toast.service';
 
@@ -17,11 +19,20 @@ import { ToastService } from '../../shared/ui/toast/toast.service';
 })
 export class StatsComponent implements OnInit {
   private readonly taskService = inject(TaskService);
+  private readonly aiService = inject(AiService);
   private readonly toastService = inject(ToastService);
 
   tasks: Task[] = [];
   isLoading = false;
   listErrorMessage = '';
+  aiEnabled = false;
+  aiStatusMessage = 'Проверяем доступность AI.';
+  aiRiskRadar: AiRiskRadar | null = null;
+  aiWeeklySummary: AiWeeklySummary | null = null;
+  aiRiskErrorMessage = '';
+  aiWeeklyErrorMessage = '';
+  isAiRiskLoading = false;
+  isAiWeeklyLoading = false;
 
   readonly doughnutOptions: ChartOptions<'doughnut'> = {
     responsive: true,
@@ -104,6 +115,7 @@ export class StatsComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadTasks();
+    this.loadAiStatus();
   }
 
   get totalCount(): number {
@@ -272,6 +284,77 @@ export class StatsComponent implements OnInit {
           this.toastService.show('Не удалось загрузить статистику', 'error');
         }
       });
+  }
+
+  loadAiStatus(): void {
+    this.aiService.getStatus().subscribe({
+      next: (status) => {
+        this.aiEnabled = status.enabled;
+        this.aiStatusMessage = status.message;
+      },
+      error: () => {
+        this.aiEnabled = false;
+        this.aiStatusMessage = 'AI-помощник временно недоступен. Попробуйте позже.';
+      }
+    });
+  }
+
+  analyzeRisks(): void {
+    if (!this.aiEnabled || this.isAiRiskLoading || !this.tasks.length) {
+      return;
+    }
+
+    this.aiRiskErrorMessage = '';
+    this.isAiRiskLoading = true;
+    this.aiService
+      .getRiskRadar()
+      .pipe(finalize(() => (this.isAiRiskLoading = false)))
+      .subscribe({
+        next: (result) => {
+          this.aiRiskRadar = result;
+        },
+        error: () => {
+          this.aiRiskErrorMessage = 'AI не смог сформировать ответ. Попробуйте ещё раз.';
+          this.toastService.show('AI-анализ рисков недоступен', 'error');
+        }
+      });
+  }
+
+  buildWeeklySummary(): void {
+    if (!this.aiEnabled || this.isAiWeeklyLoading || !this.tasks.length) {
+      return;
+    }
+
+    this.aiWeeklyErrorMessage = '';
+    this.isAiWeeklyLoading = true;
+    this.aiService
+      .getWeeklySummary()
+      .pipe(finalize(() => (this.isAiWeeklyLoading = false)))
+      .subscribe({
+        next: (result) => {
+          this.aiWeeklySummary = result;
+        },
+        error: () => {
+          this.aiWeeklyErrorMessage = 'AI не смог сформировать ответ. Попробуйте ещё раз.';
+          this.toastService.show('Итоги недели недоступны', 'error');
+        }
+      });
+  }
+
+  riskLevelLabel(level: string): string {
+    if (level === 'HIGH') {
+      return 'Высокий риск';
+    }
+
+    if (level === 'MEDIUM') {
+      return 'Средний риск';
+    }
+
+    return 'Низкий риск';
+  }
+
+  riskLevelClass(level: string): string {
+    return `ai-risk-level--${level.toLowerCase()}`;
   }
 
   private countByPriority(priority: TaskPriority): number {

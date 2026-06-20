@@ -1,138 +1,88 @@
-<section class="tasks-page">
-  <section class="tasks-hero">
+<section class="stats-page">
+  <header class="stats-header">
     <div>
-      <p class="eyebrow">Статистика</p>
-      <h2>Состояние списка</h2>
-      <p>Короткий обзор прогресса и распределения задач.</p>
+      <h2>Статистика</h2>
+      <p>{{ totalCount }} задач · {{ completedCount }} выполнено · {{ progressPercent }}% прогресс</p>
     </div>
-  </section>
+    <button
+      class="stats-ai-action"
+      type="button"
+      [disabled]="!aiEnabled || isAiRiskLoading || !tasks.length"
+      (click)="analyzeRisks()"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 13.3 8.2a3.4 3.4 0 0 0 2.5 2.5L21 12l-5.2 1.3a3.4 3.4 0 0 0-2.5 2.5L12 21l-1.3-5.2a3.4 3.4 0 0 0-2.5-2.5L3 12l5.2-1.3a3.4 3.4 0 0 0 2.5-2.5L12 3Z" /></svg>
+      {{ isAiRiskLoading ? 'Анализируем…' : 'Получить AI-вывод' }}
+    </button>
+  </header>
 
-  @if (listErrorMessage) {
-    <div class="server-error list-error">{{ listErrorMessage }}</div>
-  }
+  <div
+    class="stats-progress"
+    role="progressbar"
+    [attr.aria-valuenow]="progressPercent"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    aria-label="Прогресс выполнения"
+  ><span [style.width.%]="progressPercent"></span></div>
+
+  @if (listErrorMessage) { <div class="server-error list-error">{{ listErrorMessage }}</div> }
 
   @if (isLoading) {
-    <div class="tasks-stats" aria-hidden="true">
-      @for (item of [0, 1, 2, 3]; track item) {
-        <article class="stat-card stat-card--skeleton">
-          <span class="skeleton stat-skeleton__label"></span>
-          <span class="skeleton stat-skeleton__value"></span>
-          <span class="skeleton stat-skeleton__hint"></span>
-        </article>
-      }
+    <div class="stats-loading" aria-hidden="true">
+      <span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span>
     </div>
   } @else {
-    <section class="tasks-stats" aria-label="Сводная статистика">
-      <article class="stat-card">
-        <p class="stat-card__label">Всего</p>
-        <p class="stat-card__value">{{ totalCount }}</p>
-        <p class="stat-card__hint">задач в списке</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Активные</p>
-        <p class="stat-card__value">{{ activeCount }}</p>
-        <p class="stat-card__hint">требуют внимания</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Выполненные</p>
-        <p class="stat-card__value">{{ completedCount }}</p>
-        <p class="stat-card__hint">закрытые задачи</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Высокий приоритет</p>
-        <p class="stat-card__value">{{ highPriorityCount }}</p>
-        <p class="stat-card__hint">важные задачи</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Просроченные</p>
-        <p class="stat-card__value">{{ overdueCount }}</p>
-        <p class="stat-card__hint">нужно разобрать</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">На сегодня</p>
-        <p class="stat-card__value">{{ todayCount }}</p>
-        <p class="stat-card__hint">с дедлайном сегодня</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Без дедлайна</p>
-        <p class="stat-card__value">{{ noDeadlineCount }}</p>
-        <p class="stat-card__hint">можно спланировать</p>
-      </article>
-      <article class="stat-card">
-        <p class="stat-card__label">Процент выполнения</p>
-        <p class="stat-card__value">{{ progressPercent }}%</p>
-        <p class="stat-card__hint">общий прогресс</p>
-      </article>
+    <section class="stats-metrics" aria-label="Краткая статистика">
+      <div><strong>{{ activeCount }}</strong><span>активных</span></div>
+      <div class="stats-metric--danger"><strong>{{ overdueCount }}</strong><span>просрочено</span></div>
+      <div><strong>{{ noDeadlineCount }}</strong><span>без дедлайна</span></div>
+      <div class="stats-metric--success"><strong>{{ todayCount }}</strong><span>сегодня</span></div>
     </section>
 
-    <section class="tasks-progress" aria-label="Прогресс выполнения">
-      <div class="tasks-progress__header">
-        <div>
-          <p class="tasks-progress__title">Процент выполнения</p>
-          <p class="tasks-progress__meta">{{ progressMeta }}</p>
-        </div>
-        <strong class="tasks-progress__percent">{{ progressPercent }}%</strong>
-      </div>
-      <div
-        class="tasks-progress__track"
-        role="progressbar"
-        [attr.aria-valuenow]="progressPercent"
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
-        <span class="tasks-progress__bar" [style.width.%]="progressPercent"></span>
-      </div>
-    </section>
-
-    <section class="stats-charts" aria-label="Графики задач">
-      <article class="chart-card">
-        <header class="chart-card__header">
-          <h2>Статус задач</h2>
-          <p>Активные и выполненные задачи.</p>
-        </header>
-        <div class="chart-card__body">
+    <section class="stats-story" aria-label="Главные показатели">
+      <article class="analytics-card analytics-card--status">
+        <header><h2>Статус задач</h2><p>Активные и выполненные.</p></header>
+        <div class="analytics-card__chart analytics-card__chart--donut">
           <canvas baseChart [type]="'doughnut'" [data]="statusChartData" [options]="doughnutOptions"></canvas>
         </div>
       </article>
 
-      <article class="chart-card">
-        <header class="chart-card__header">
-          <h2>Распределение по приоритетам</h2>
-          <p>Активные задачи по уровню важности.</p>
-        </header>
-        <div class="chart-card__body">
+      <article class="analytics-card analytics-card--priority">
+        <header><h2>Распределение по приоритету</h2><p>Активные задачи по важности.</p></header>
+        <div class="analytics-card__chart analytics-card__chart--compact">
           <canvas baseChart [type]="'bar'" [data]="priorityChartData" [options]="barOptions"></canvas>
         </div>
       </article>
 
-      <article class="chart-card">
-        <header class="chart-card__header">
-          <h2>Задачи по проектам</h2>
-          <p>{{ hasProjectData ? 'Распределение задач между проектами.' : 'Создайте проекты, чтобы увидеть распределение задач.' }}</p>
-        </header>
-        <div class="chart-card__body">
-          <canvas baseChart [type]="'bar'" [data]="projectChartData" [options]="barOptions"></canvas>
+      <article class="analytics-card analytics-card--insights">
+        <header><h2>Что важно сейчас</h2><p>Короткие выводы по списку.</p></header>
+        <div class="stats-insights__list">
+          @for (insight of insights; track insight) { <p>{{ insight }}</p> }
         </div>
-      </article>
 
-      <article class="chart-card chart-card--wide">
-        <header class="chart-card__header">
-          <h2>Выполнено за 7 дней</h2>
-          <p>Сколько задач закрывалось по дням.</p>
-        </header>
-        <div class="chart-card__body chart-card__body--wide">
-          <canvas baseChart [type]="'line'" [data]="completedWeeklyChartData" [options]="lineOptions"></canvas>
-        </div>
+        @if (aiRiskErrorMessage) { <div class="stats-ai-error">{{ aiRiskErrorMessage }}</div> }
+        @if (aiRiskRadar; as radar) {
+          <div class="stats-ai-result">
+            <strong>{{ riskLevelLabel(radar.riskLevel) }}</strong>
+            <p>{{ radar.summary }}</p>
+          </div>
+        }
       </article>
     </section>
 
-    <section class="stats-insights" aria-label="Выводы по задачам">
-      <h2>Что важно сейчас</h2>
-      <div class="stats-insights__list">
-        @for (insight of insights; track insight) {
-          <p>{{ insight }}</p>
-        }
-      </div>
+    <section class="stats-trends" aria-label="Динамика задач">
+      <article class="analytics-card analytics-card--trend">
+        <header><h2>Выполнено за 7 дней</h2><p>Динамика закрытых задач по дням.</p></header>
+        <div class="analytics-card__chart analytics-card__chart--wide">
+          <canvas baseChart [type]="'line'" [data]="completedWeeklyChartData" [options]="lineOptions"></canvas>
+        </div>
+      </article>
+
+      <article class="analytics-card analytics-card--projects">
+        <header><h2>Распределение по проектам</h2><p>{{ hasProjectData ? 'Где сосредоточено больше всего задач.' : 'Добавьте проекты для распределения.' }}</p></header>
+        <div class="analytics-card__chart analytics-card__chart--projects">
+          <canvas baseChart [type]="'bar'" [data]="projectChartData" [options]="barOptions"></canvas>
+        </div>
+      </article>
     </section>
   }
 </section>

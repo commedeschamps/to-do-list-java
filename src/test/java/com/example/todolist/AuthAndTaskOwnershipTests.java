@@ -1,6 +1,7 @@
 package com.example.todolist;
 
 import com.example.todolist.dto.ApiErrorResponse;
+import com.example.todolist.dto.AiStatusResponse;
 import com.example.todolist.dto.AuthResponse;
 import com.example.todolist.dto.CurrentUserResponse;
 import com.example.todolist.entity.Task;
@@ -82,6 +83,8 @@ class AuthAndTaskOwnershipTests {
         assertThat(response.body().token()).isNotBlank();
         assertThat(response.body().user().id()).isNotNull();
         assertThat(response.body().user().username()).isEqualTo("alice123");
+        assertThat(response.body().user().displayName()).isEqualTo("alice123");
+        assertThat(userRepository.findByUsername("alice123").orElseThrow().getDisplayName()).isEqualTo("alice123");
     }
 
     @Test
@@ -113,6 +116,7 @@ class AuthAndTaskOwnershipTests {
         assertThat(validResponse.body()).isNotNull();
         assertThat(validResponse.body().token()).isNotBlank();
         assertThat(validResponse.body().user().username()).isEqualTo("alice123");
+        assertThat(validResponse.body().user().displayName()).isEqualTo("alice123");
 
         TestResponse<ApiErrorResponse> invalidResponse = post(
                 "/api/auth/login",
@@ -145,6 +149,121 @@ class AuthAndTaskOwnershipTests {
         assertThat(response.body()).isNotNull();
         assertThat(response.body().id()).isEqualTo(alice.userId());
         assertThat(response.body().username()).isEqualTo("alice123");
+        assertThat(response.body().displayName()).isEqualTo("alice123");
+    }
+
+    @Test
+    void authenticatedUserCanUpdateOnlyOwnDisplayNameWithoutChangingLoginOrOwnership() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        AuthSession bob = register("bob123", "password1");
+        long aliceTaskId = createTask(alice.token(), "Owned before profile update");
+
+        Map<String, Object> profilePayload = new LinkedHashMap<>();
+        profilePayload.put("displayName", "  Adam  ");
+        profilePayload.put("username", "changed-login");
+        profilePayload.put("userId", bob.userId());
+
+        TestResponse<CurrentUserResponse> updateResponse = exchange(
+                "/api/auth/me/profile",
+                HttpMethod.PUT,
+                alice.token(),
+                profilePayload,
+                CurrentUserResponse.class,
+                new Object[0]
+        );
+
+        assertThat(updateResponse.is2xxSuccessful()).isTrue();
+        assertThat(updateResponse.body()).isNotNull();
+        assertThat(updateResponse.body().id()).isEqualTo(alice.userId());
+        assertThat(updateResponse.body().username()).isEqualTo("alice123");
+        assertThat(updateResponse.body().displayName()).isEqualTo("Adam");
+        assertThat(userRepository.findByUsername("changed-login")).isEmpty();
+        assertThat(userRepository.findByUsername("bob123").orElseThrow().getDisplayName()).isEqualTo("bob123");
+
+        TestResponse<CurrentUserResponse> meResponse = exchange(
+                "/api/auth/me",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                CurrentUserResponse.class,
+                new Object[0]
+        );
+        assertThat(meResponse.body()).isNotNull();
+        assertThat(meResponse.body().displayName()).isEqualTo("Adam");
+
+        Task[] tasks = getTasks(alice.token());
+        assertThat(tasks).extracting(Task::getId).containsExactly(aliceTaskId);
+
+        TestResponse<AuthResponse> loginResponse = post(
+                "/api/auth/login",
+                authPayload("alice123", "password1"),
+                AuthResponse.class
+        );
+        assertThat(loginResponse.is2xxSuccessful()).isTrue();
+        assertThat(loginResponse.body().user().displayName()).isEqualTo("Adam");
+    }
+
+    @Test
+    void profileUpdateRequiresTokenAndValidatesDisplayNameLength() throws Exception {
+        TestResponse<String> anonymousResponse = exchange(
+                "/api/auth/me/profile",
+                HttpMethod.PUT,
+                null,
+                Map.of("displayName", "Adam"),
+                String.class,
+                new Object[0]
+        );
+        assertThat(anonymousResponse.statusCode()).isIn(401, 403);
+
+        AuthSession alice = register("alice123", "password1");
+        TestResponse<ApiErrorResponse> tooLongResponse = exchange(
+                "/api/auth/me/profile",
+                HttpMethod.PUT,
+                alice.token(),
+                Map.of("displayName", "a".repeat(81)),
+                ApiErrorResponse.class,
+                new Object[0]
+        );
+        assertThat(tooLongResponse.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void aiEndpointsRequireTokenAndReturnControlledUnavailableWhenDisabled() throws Exception {
+        TestResponse<String> anonymousResponse = exchange(
+                "/api/ai/today-plan",
+                HttpMethod.POST,
+                null,
+                Map.of(),
+                String.class,
+                new Object[0]
+        );
+        assertThat(anonymousResponse.statusCode()).isIn(401, 403);
+
+        AuthSession alice = register("alice123", "password1");
+
+        TestResponse<AiStatusResponse> statusResponse = exchange(
+                "/api/ai/status",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                AiStatusResponse.class,
+                new Object[0]
+        );
+        assertThat(statusResponse.is2xxSuccessful()).isTrue();
+        assertThat(statusResponse.body()).isNotNull();
+        assertThat(statusResponse.body().enabled()).isFalse();
+
+        TestResponse<ApiErrorResponse> disabledResponse = exchange(
+                "/api/ai/today-plan",
+                HttpMethod.POST,
+                alice.token(),
+                Map.of(),
+                ApiErrorResponse.class,
+                new Object[0]
+        );
+        assertThat(disabledResponse.statusCode()).isEqualTo(503);
+        assertThat(disabledResponse.body()).isNotNull();
+        assertThat(disabledResponse.body().message()).isEqualTo("AI-помощник временно недоступен. Попробуйте позже.");
     }
 
     @Test
@@ -200,6 +319,39 @@ class AuthAndTaskOwnershipTests {
         assertThat(aliceTasks).hasSize(1);
         assertThat(aliceTasks[0].getId()).isEqualTo(aliceTaskId);
         assertThat(aliceTasks[0].getTitle()).isEqualTo("Alice task");
+    }
+
+    @Test
+    void userCanReadOwnTaskByIdAndCannotReadAnotherUsersTask() throws Exception {
+        AuthSession alice = register("alice123", "password1");
+        AuthSession bob = register("bob123", "password1");
+        long aliceTaskId = createTask(alice.token(), "Alice task");
+
+        TestResponse<TaskApiResponse> aliceReadResponse = exchange(
+                "/api/tasks/{id}",
+                HttpMethod.GET,
+                alice.token(),
+                null,
+                TaskApiResponse.class,
+                aliceTaskId
+        );
+        assertThat(aliceReadResponse.is2xxSuccessful()).isTrue();
+        assertThat(aliceReadResponse.body()).isNotNull();
+        assertThat(aliceReadResponse.body().id()).isEqualTo(aliceTaskId);
+        assertThat(aliceReadResponse.body().title()).isEqualTo("Alice task");
+        assertThat(aliceReadResponse.body().description()).isEqualTo("Description for Alice task");
+
+        TestResponse<ApiErrorResponse> bobReadResponse = exchange(
+                "/api/tasks/{id}",
+                HttpMethod.GET,
+                bob.token(),
+                null,
+                ApiErrorResponse.class,
+                aliceTaskId
+        );
+        assertThat(bobReadResponse.statusCode()).isEqualTo(404);
+        assertThat(bobReadResponse.body()).isNotNull();
+        assertThat(bobReadResponse.body().message()).isEqualTo("Задача не найдена");
     }
 
     @Test

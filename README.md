@@ -2,7 +2,7 @@
 
 A production-grade, full-stack Todo List application featuring an Angular frontend and a Spring Boot backend. The application features a clean dark navy workspace with user-scoped tasks, priority boards, subtasks, projects, calendar and statistics views, and JWT-based authentication.
 
-Live Demo: [todo.commedeschamps.dev](https://todo.commedeschamps.dev/)
+Live Demo: https://to-do-list-java.vercel.app
 
 ## Overview
 
@@ -10,217 +10,207 @@ Managing personal productivity requires a centralized, secure, and intuitive wor
 
 ## Features
 
-- **JWT Authentication**: Secure user registration, login, and session persistence.
-- **User-Scoped Tasks**: Completely isolated data workspaces where users can only view and manage their own resources.
-- **Task CRUD**: Intuitive modals and inline editing for quick task modifications, with confirm dialogs for deletions.
-- **Optional Descriptions**: Enrich tasks with detailed descriptions and notes.
-- **Due Dates**: Organize tasks by deadlines to ensure timely completion.
-- **Calendar View**: Interactive FullCalendar integration to visualize task timelines monthly or weekly.
-- **Priority Board**: Drag-and-drop priority board using Angular CDK to easily organize tasks by urgency.
-- **Subtasks & Checklists**: Deconstruct larger tasks into smaller, manageable subtasks with completion tracking.
-- **Projects & Folders**: Group related tasks into distinct projects for organized categorization.
-- **Labels & Tags**: Assign customizable labels to quickly filter and organize tasks.
-- **Task Colors**: Highlight tasks with specific color codes to differentiate priorities or categories.
-- **Search, Filters, and Sorting**: Real-time fuzzy search powered by Fuse.js alongside sorting and filtering by status, priority, and date.
-- **Statistics Dashboard**: Visual overview of task distribution, completion rates, and progress bars using Chart.js/ng2-charts.
-- **User Settings**: Customization settings for user profiles.
-
-## Tech Stack
-
-### Frontend
-- **Angular**: Framework for building the modern Single Page Application (SPA).
-- **TypeScript**: Typed programming language for frontend logic.
-- **SCSS**: Modular, structured styling defining custom dark navy design tokens and UI components.
-- **FullCalendar**: Dynamic interactive calendar to schedule and visualize tasks.
-- **Chart.js & ng2-charts**: Visual reports, metrics, and task completion statistics.
-- **Fuse.js**: Client-side fuzzy search for fast task queries.
-- **Angular CDK DragDrop**: Smooth drag-and-drop interaction for reordering task priorities.
-
-### Backend
-- **Java**: Core programming language for the backend.
-- **Spring Boot**: RESTful microservice framework.
-- **Spring Security**: Robust authentication and route protection.
-- **JWT (JSON Web Token)**: Stateless authentication mechanism.
-- **Spring Data JPA & Hibernate**: Object-relational mapping (ORM) and data access.
-- **Flyway**: Database schema migration management.
-
-### Database
-- **PostgreSQL**: Robust open-source relational database.
-- **Neon PostgreSQL**: Serverless PostgreSQL database utilized in production.
-
-### Deployment
-- **Frontend**: Vercel (SPA routing configured via `vercel.json` to handle Angular path matching).
-- **Backend**: Render (deployed as a Docker container service via `Dockerfile.backend`).
-- **Database**: Neon (managed cloud PostgreSQL database).
+- JWT registration, login and persisted session.
+- User-scoped task CRUD with `GET /api/tasks`, `GET /api/tasks/{id}`, create, update and delete.
+- Optional task description, priority, due date, completion state, color, project and labels.
+- Projects and labels are private to the authenticated user.
+- Subtasks are scoped through the parent task.
+- Calendar, priority board, search, filters, sorting and stats dashboard.
+- AI Productivity Assistant: Today Planner, Risk Radar, Ask My Tasks, Auto Cleanup and Weekly Summary.
+- AI providers are called only from the backend, with Gemini as primary, Groq as fallback and OpenRouter as backup.
+- Flyway-managed PostgreSQL schema with Hibernate validation.
 
 ## Architecture
 
-The application utilizes a decoupled client-server architecture deployed entirely on cloud-native platforms:
+```text
+Browser
+  -> Angular SPA on Vercel
+  -> Spring Boot REST API on Render
+  -> PostgreSQL on Neon
+```
 
-- **Vercel** serves the Angular Single Page Application (SPA), ensuring low-latency delivery. All client-side routes are rewritten to `index.html` via `vercel.json` to support direct deep linking.
-- **Render** runs the Spring Boot backend inside a lightweight Eclipse Temurin JVM Docker container, handling business logic, authentication, and database access.
-- **Neon** hosts the serverless PostgreSQL database instance.
-- **Flyway** executes automated migration scripts on backend startup to ensure database schemas match the codebase state.
+- Frontend: Angular SPA, Angular Router, SCSS, FullCalendar, Chart.js/ng2-charts, Fuse.js.
+- Backend: Spring Boot, Spring Security, JWT, DTO responses, Spring Data JPA.
+- Database: PostgreSQL with Flyway migrations in `src/main/resources/db/migration`.
+- Deployment: Vercel serves the frontend, Render runs the backend Docker service, Neon stores production data.
+
+## Assignment Requirements Coverage
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Angular frontend | Done | `src/app`, `angular.json` |
+| Spring Boot backend | Done | `src/main/java/com/example/todolist` |
+| PostgreSQL | Done | PostgreSQL driver and Flyway migrations |
+| JWT auth | Done | `/api/auth/register`, `/api/auth/login`, `/api/auth/me` |
+| Task CRUD | Done | `GET/POST/PUT/DELETE /api/tasks` |
+| `GET /api/tasks/{id}` | Done | `TaskController#getById` |
+| Task has `id`, `title`, `description`, `completed`, `createdAt` | Done | `TaskResponse` |
+| Description optional | Done | blank or missing description is stored as `null` |
+| Validation and errors | Done | Bean Validation and `ApiExceptionHandler` |
+| DTO responses | Done | `TaskResponse`, `ProjectResponse`, `LabelResponse`, `SubtaskResponse` |
+| Ownership checks | Done | repository methods filter by authenticated username |
+| Flyway migrations | Done | `V1` through `V5` migration scripts |
+| `ddl-auto=validate` | Done | `src/main/resources/application.properties` |
+| Production deployment | Done | Vercel + Render + Neon |
+| Optional AI assistant | Done | `/api/ai/*` backend endpoints and AI blocks on `/today`, `/tasks`, `/stats` |
+
+## API Overview
+
+Protected endpoints require:
 
 ```text
-User
-  ↓
-Vercel Angular Frontend
-  ↓ REST API (JWT Authenticated)
-Render Spring Boot Backend (Docker Container)
-  ↓ JDBC (SSL Required)
-Neon PostgreSQL
+Authorization: Bearer <jwt>
 ```
 
-## Authentication and Security
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
 
-- Users register and log in to obtain a JSON Web Token (JWT).
-- All protected API routes require the client to include the token in the `Authorization: Bearer <token>` request header.
-- Tasks, subtasks, projects, and labels are mapped to the authenticated user ID at the database and application levels, preventing unauthorized cross-user access.
-- Sensitive credentials, database connection strings, and the JWT secret key are managed via environment variables and never committed to source control.
-- CORS (Cross-Origin Resource Sharing) is configured explicitly, permitting access only from the local frontend environment (`http://localhost:4200`) and the specific production Vercel domain.
+GET    /api/tasks
+GET    /api/tasks/{id}
+POST   /api/tasks
+PUT    /api/tasks/{id}
+DELETE /api/tasks/{id}
 
-## Database and Migrations
+GET    /api/projects
+POST   /api/projects
+PUT    /api/projects/{id}
+DELETE /api/projects/{id}
 
-- **PostgreSQL** serves as the primary relational database.
-- **Flyway** manages database version control and migration tracking. Migration scripts are applied sequentially on backend startup. The migration history includes:
-  - `V1__initial_schema.sql` - Core database tables (users, tasks).
-  - `V2__add_task_dates.sql` - Adding start date and due date fields to tasks.
-  - `V3__add_subtasks.sql` - Introducing checklists and nested subtasks.
-  - `V4__add_projects.sql` - Adding support for task grouping into projects.
-  - `V5__add_labels.sql` - Support for tagging tasks with custom labels.
-- **Hibernate** operates in `validate` mode (`ddl-auto=validate`), ensuring that the Java entities perfectly match the database schema defined by Flyway.
+GET    /api/labels
+POST   /api/labels
+PUT    /api/labels/{id}
+DELETE /api/labels/{id}
 
-## Local Development
+GET    /api/tasks/{taskId}/subtasks
+POST   /api/tasks/{taskId}/subtasks
+PATCH  /api/tasks/{taskId}/subtasks/{subtaskId}
+DELETE /api/tasks/{taskId}/subtasks/{subtaskId}
 
-### Prerequisites
+GET    /api/ai/status
+POST   /api/ai/today-plan
+POST   /api/ai/risk-radar
+POST   /api/ai/ask-tasks
+POST   /api/ai/auto-cleanup
+POST   /api/ai/weekly-summary
+```
 
-Ensure you have the following installed:
-- Java 17 or higher
-- Node.js 20 or higher
+## Local Run
+
+Prerequisites:
+
+- Java 17+
+- Node.js 20+
+- npm
 - PostgreSQL
-- Gradle wrapper (included in the project)
 
-### Environment Variables
+Create a local database and copy the safe example file:
 
-Configure your environment variables. You can create a `.env` file in the project root folder:
-
-```env
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tododb
-SPRING_DATASOURCE_USERNAME=postgres
-SPRING_DATASOURCE_PASSWORD=postgres
-JWT_SECRET=change_me_to_a_long_random_secret
-CORS_ALLOWED_ORIGINS=http://localhost:4200
+```bash
+cp .env.example .env
 ```
 
-### Backend Setup
+Export the variables from `.env` in your shell or configure them in your IDE. The backend reads environment variables directly.
 
-To run the Spring Boot backend locally:
+Run backend:
 
 ```bash
 ./gradlew bootRun
 ```
 
-The backend service will be available at:
-
-```text
-http://localhost:8080
-```
-
-### Frontend Setup
-
-To install dependencies and start the Angular frontend application:
+Run frontend:
 
 ```bash
 npm install
 npm start
 ```
 
-The frontend application will run locally at:
+Local URLs:
+
+```text
+Frontend: http://localhost:4200
+Backend:  http://localhost:8080
+```
+
+Validation commands:
+
+```bash
+npm run build
+./gradlew test
+```
+
+## Deployment
+
+### Frontend: Vercel
+
+- Build command: `npm run build`
+- Output directory: `dist/todo-list-frontend`
+- SPA refresh support is configured in `vercel.json`.
+- Production API URL is configured in `src/environments/environment.prod.ts`.
+
+### Backend: Render
+
+- Runtime: Docker
+- Dockerfile: `Dockerfile.backend`
+- Required environment variables:
+
+```text
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>/<database>?sslmode=require
+SPRING_DATASOURCE_USERNAME=<database-user>
+SPRING_DATASOURCE_PASSWORD=<database-password>
+JWT_SECRET=<long-random-secret>
+CORS_ALLOWED_ORIGINS=http://localhost:4200,https://to-do-list-java.vercel.app,https://todo.commedeschamps.dev
+
+AI_ENABLED=false
+
+AI_PRIMARY_PROVIDER=gemini
+AI_PRIMARY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+AI_PRIMARY_MODEL=gemini-2.5-flash
+AI_PRIMARY_API_KEY=<gemini-provider-token>
+
+AI_FALLBACK_ENABLED=true
+AI_FALLBACK_PROVIDER=groq
+AI_FALLBACK_BASE_URL=https://api.groq.com/openai/v1
+AI_FALLBACK_MODEL=llama-3.1-8b-instant
+AI_FALLBACK_API_KEY=<groq-provider-token>
+
+AI_BACKUP_ENABLED=true
+AI_BACKUP_PROVIDER=openrouter
+AI_BACKUP_BASE_URL=https://openrouter.ai/api/v1
+AI_BACKUP_MODEL=openrouter/free
+AI_BACKUP_API_KEY=<openrouter-provider-token>
+```
+
+AI features are optional and require backend environment variables. If AI is disabled or no provider key is configured, the core task manager continues to work normally and AI blocks show a disabled state.
+
+Provider order:
+
+```text
+Primary: Gemini
+Fallback: Groq
+Backup: OpenRouter
+```
+
+### Database: Neon
+
+- PostgreSQL database.
+- Flyway applies schema migrations on backend startup.
+- Hibernate uses `spring.jpa.hibernate.ddl-auto=validate`.
+
+## Security Notes
+
+- `.env` and `.env.*` are ignored by Git.
+- `.env.example` contains placeholders only.
+- JWT secret is read from `JWT_SECRET`.
+- AI provider keys are read only by the backend from `AI_PRIMARY_API_KEY`, `AI_FALLBACK_API_KEY` and `AI_BACKUP_API_KEY`; they are never stored in the Angular bundle.
+- Allowed CORS origins for submission:
 
 ```text
 http://localhost:4200
+https://to-do-list-java.vercel.app
+https://todo.commedeschamps.dev
 ```
 
-## Production Deployment
-
-### Frontend - Vercel
-
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist/todo-list-frontend`
-- The production environment config (`src/environments/environment.prod.ts`) points the `apiUrl` to the production backend on Render.
-- Routing is managed via `vercel.json` to direct all path requests back to `/index.html` for client-side routing resolution.
-
-### Backend - Render
-
-- Deployed as a web service using Docker runtime.
-- **Dockerfile**: `Dockerfile.backend`
-- The following environment variables must be defined on Render:
-  - `SPRING_DATASOURCE_URL` (PostgreSQL JDBC connection URL with `sslmode=require`)
-  - `SPRING_DATASOURCE_USERNAME`
-  - `SPRING_DATASOURCE_PASSWORD`
-  - `JWT_SECRET`
-  - `CORS_ALLOWED_ORIGINS` (containing the Vercel app domain)
-
-### Database - Neon
-
-- A cloud PostgreSQL instance hosted on Neon.
-- The database connection JDBC URL must specify SSL requirement:
-  ```text
-  jdbc:postgresql://<host>/<database>?sslmode=require
-  ```
-
-## API Overview
-
-Protected endpoints require a valid JWT header (`Authorization: Bearer <token>`).
-
-### Authentication
-
-```text
-POST   /api/auth/register     - Register a new user account
-POST   /api/auth/login        - Authenticate credentials and receive JWT
-GET    /api/auth/me           - Retrieve current authenticated user profile
-```
-
-### Tasks
-
-```text
-GET    /api/tasks             - Retrieve all tasks for the current user
-POST   /api/tasks             - Create a new task
-PUT    /api/tasks/{id}        - Update an existing task
-DELETE /api/tasks/{id}        - Delete a task
-```
-
-### Subtasks
-
-```text
-GET    /api/tasks/{taskId}/subtasks             - Get all subtasks of a task
-POST   /api/tasks/{taskId}/subtasks            - Add a new subtask to a task
-PATCH  /api/tasks/{taskId}/subtasks/{subtaskId} - Update subtask status or content
-DELETE /api/tasks/{taskId}/subtasks/{subtaskId} - Delete a subtask
-```
-
-### Projects
-
-```text
-GET    /api/projects          - Get all projects for the current user
-POST   /api/projects          - Create a new project
-PUT    /api/projects/{id}     - Update project name/details
-DELETE /api/projects/{id}     - Delete a project and dissociate its tasks
-```
-
-### Labels
-
-```text
-GET    /api/labels            - Get all labels for the current user
-POST   /api/labels            - Create a new label
-PUT    /api/labels/{id}       - Update label name/color
-DELETE /api/labels/{id}       - Delete a label
-```
-## Project Status
-
-The project is deployed and functional. Further improvements may include UI polish, bundle optimization and additional dashboard insights.
-
-## License
-
-No license specified.
+- Tokens are sent in the `Authorization` header by the Angular HTTP interceptor, not in URLs.
+- AI endpoints require JWT and build task context only from the authenticated user's tasks. The frontend never sends `userId`.

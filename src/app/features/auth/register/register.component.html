@@ -16,7 +16,7 @@
 
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <label class="field">
-          <span>Имя пользователя</span>
+          <span>Логин</span>
           <span
             class="input-shell input-shell-user"
             [class.input-shell--error]="isFieldInvalid(form.controls.username)"
@@ -26,7 +26,7 @@
               type="text"
               formControlName="username"
               autocomplete="username"
-              placeholder="Введите имя пользователя"
+              placeholder="Придумайте логин"
             >
           </span>
           <small class="field-hint">От 3 до 30 символов.</small>

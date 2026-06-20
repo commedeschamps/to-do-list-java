@@ -1,11 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 
 import { AuthService } from '../../core/services/auth.service';
+import { AiAssistantUiService } from '../../core/services/ai-assistant-ui.service';
+import { AiService } from '../../core/services/ai.service';
 import { UserPreferencesService } from '../../core/services/user-preferences.service';
 import { ToastService } from '../../shared/ui/toast/toast.service';
+
+type SettingsSection = 'profile' | 'interface' | 'ai' | 'account';
 
 @Component({
   selector: 'app-settings',
@@ -14,16 +19,19 @@ import { ToastService } from '../../shared/ui/toast/toast.service';
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss'
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
+  private readonly aiService = inject(AiService);
+  private readonly aiAssistantUi = inject(AiAssistantUiService);
   private readonly fb = inject(FormBuilder);
   private readonly preferencesService = inject(UserPreferencesService);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
   private readonly maxAvatarSize = 2 * 1024 * 1024;
+  private readonly subscriptions = new Subscription();
 
   readonly profileForm = this.fb.nonNullable.group({
-    displayName: ['']
+    displayName: ['', Validators.maxLength(80)]
   });
 
   readonly uiForm = this.fb.nonNullable.group({
@@ -33,28 +41,40 @@ export class SettingsComponent implements OnInit {
 
   avatarPreview: string | null = null;
   avatarErrorMessage = '';
+  aiEnabled = false;
+  aiStatusMessage = 'Проверяем доступность AI.';
+  isSavingProfile = false;
+  profileErrorMessage = '';
+  activeSection: SettingsSection = 'profile';
 
   ngOnInit(): void {
     const preferences = this.preferencesService.snapshot;
+    const currentUser = this.authService.getCurrentUser();
 
     this.profileForm.setValue({
-      displayName: preferences.displayName || this.defaultDisplayName
+      displayName: currentUser?.displayName ?? ''
     });
     this.uiForm.setValue({
       compactMode: preferences.compactMode,
       reduceMotion: preferences.reduceMotion
     });
     this.avatarPreview = preferences.avatarDataUrl;
+    this.subscriptions.add(
+      this.authService.currentUser$.subscribe((user) => {
+        if (user && !this.profileForm.dirty && !this.isSavingProfile) {
+          this.profileForm.controls.displayName.setValue(user.displayName ?? '');
+        }
+      })
+    );
+    this.loadAiStatus();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
   get defaultDisplayName(): string {
-    const username = this.authService.getUsername();
-
-    if (!username) {
-      return 'Пользователь';
-    }
-
-    return username;
+    return this.authService.getDisplayName();
   }
 
   get accountUsername(): string {
@@ -64,6 +84,23 @@ export class SettingsComponent implements OnInit {
   get profileInitial(): string {
     const name = this.profileForm.controls.displayName.value.trim() || this.defaultDisplayName;
     return name.charAt(0).toLocaleUpperCase('ru-RU') || 'П';
+  }
+
+  get profileIdentityName(): string {
+    return this.profileForm.controls.displayName.value.trim() || this.defaultDisplayName;
+  }
+
+  selectSection(section: SettingsSection): void {
+    this.activeSection = section;
+  }
+
+  resetProfile(): void {
+    const currentUser = this.authService.getCurrentUser();
+    this.profileForm.controls.displayName.setValue(currentUser?.displayName ?? '');
+    this.profileForm.markAsPristine();
+    this.avatarPreview = this.preferencesService.snapshot.avatarDataUrl;
+    this.avatarErrorMessage = '';
+    this.profileErrorMessage = '';
   }
 
   onAvatarSelected(event: Event): void {
@@ -104,13 +141,30 @@ export class SettingsComponent implements OnInit {
 
   saveProfile(): void {
     this.avatarErrorMessage = '';
+    this.profileErrorMessage = '';
+
+    if (this.profileForm.invalid) {
+      this.profileForm.markAllAsTouched();
+      return;
+    }
 
     const value = this.profileForm.getRawValue();
-    this.preferencesService.updateProfile({
-      avatarDataUrl: this.avatarPreview,
-      displayName: value.displayName
+    this.isSavingProfile = true;
+
+    this.authService.updateProfile(value.displayName).subscribe({
+      next: (user) => {
+        this.isSavingProfile = false;
+        this.profileForm.controls.displayName.setValue(user.displayName ?? '');
+        this.profileForm.markAsPristine();
+        this.preferencesService.updateAvatar(this.avatarPreview);
+        this.toastService.show('Профиль сохранён', 'success');
+      },
+      error: () => {
+        this.isSavingProfile = false;
+        this.profileErrorMessage = 'Не удалось сохранить профиль. Попробуйте ещё раз.';
+        this.toastService.show('Не удалось сохранить профиль', 'error');
+      }
     });
-    this.toastService.show('Профиль сохранён', 'success');
   }
 
   removeAvatar(): void {
@@ -124,8 +178,25 @@ export class SettingsComponent implements OnInit {
     this.toastService.show('Настройки интерфейса сохранены', 'success');
   }
 
+  openAiAssistant(): void {
+    this.aiAssistantUi.open('ask');
+  }
+
   logout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/login');
+  }
+
+  private loadAiStatus(): void {
+    this.aiService.getStatus().subscribe({
+      next: (status) => {
+        this.aiEnabled = status.enabled;
+        this.aiStatusMessage = status.message;
+      },
+      error: () => {
+        this.aiEnabled = false;
+        this.aiStatusMessage = 'AI-помощник временно недоступен.';
+      }
+    });
   }
 }

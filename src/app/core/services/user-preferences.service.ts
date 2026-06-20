@@ -5,14 +5,12 @@ import { BehaviorSubject } from 'rxjs';
 export interface UserPreferences {
   avatarDataUrl: string | null;
   compactMode: boolean;
-  displayName: string;
   reduceMotion: boolean;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarDataUrl: null,
   compactMode: false,
-  displayName: '',
   reduceMotion: false
 };
 
@@ -45,11 +43,10 @@ export class UserPreferencesService {
     this.applyUiPreferences(preferences);
   }
 
-  updateProfile(profile: Pick<UserPreferences, 'displayName' | 'avatarDataUrl'>): void {
+  updateAvatar(avatarDataUrl: string | null): void {
     this.setPreferences({
       ...this.snapshot,
-      displayName: profile.displayName.trim(),
-      avatarDataUrl: profile.avatarDataUrl
+      avatarDataUrl
     });
   }
 
@@ -87,7 +84,6 @@ export class UserPreferencesService {
       return {
         avatarDataUrl: typeof parsed.avatarDataUrl === 'string' ? parsed.avatarDataUrl : null,
         compactMode: Boolean(parsed.compactMode),
-        displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
         reduceMotion: Boolean(parsed.reduceMotion)
       };
     } catch {

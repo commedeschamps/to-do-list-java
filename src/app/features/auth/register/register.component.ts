@@ -65,11 +65,11 @@ export class RegisterComponent {
     }
 
     if (control.hasError('required')) {
-      return 'Введите имя пользователя';
+      return 'Введите логин';
     }
 
     if (control.hasError('minlength') || control.hasError('maxlength')) {
-      return 'Имя пользователя должно быть от 3 до 30 символов';
+      return 'Логин должен быть от 3 до 30 символов';
     }
 
     return '';

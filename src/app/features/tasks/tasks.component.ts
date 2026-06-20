@@ -3,9 +3,11 @@ import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, inje
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import Fuse, { type IFuseOptions } from 'fuse.js';
-import { Subscription, debounceTime, distinctUntilChanged, finalize, forkJoin } from 'rxjs';
+import { Observable, Subscription, debounceTime, distinctUntilChanged, finalize, forkJoin, map, of, switchMap } from 'rxjs';
 
+import { AiService } from '../../core/services/ai.service';
 import { LabelService, ProjectService, SubtaskService, TaskService } from '../../core/services/task.service';
+import { AiAskTasksResponse, AiCleanupSuggestion } from '../../shared/models/ai.model';
 import { Label, Project, Subtask, Task, TaskDateFilter, TaskFilter, TaskPriority, TaskSortMode } from '../../shared/models/task.model';
 import { ToastService } from '../../shared/ui/toast/toast.service';
 
@@ -27,6 +29,12 @@ interface TasksEmptyState {
   title: string;
 }
 
+type CleanupSuggestionView = AiCleanupSuggestion & {
+  localId: string;
+};
+
+type TaskView = 'all' | 'today' | 'overdue' | 'important' | 'completed';
+
 @Component({
   selector: 'app-tasks',
   standalone: true,
@@ -36,6 +44,7 @@ interface TasksEmptyState {
 })
 export class TasksComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
+  private readonly aiService = inject(AiService);
   private readonly taskService = inject(TaskService);
   private readonly projectService = inject(ProjectService);
   private readonly labelService = inject(LabelService);
@@ -49,6 +58,8 @@ export class TasksComponent implements OnInit, OnDestroy {
   @ViewChild('confirmModalPanel') private confirmModalPanel?: ElementRef<HTMLElement>;
 
   readonly searchControl = new FormControl('', { nonNullable: true });
+  readonly quickAddControl = new FormControl('', { nonNullable: true });
+  readonly aiQuestionControl = new FormControl('Что у меня срочное на этой неделе?', { nonNullable: true });
 
   readonly taskForm = this.fb.nonNullable.group({
     title: ['', Validators.required],
@@ -84,6 +95,14 @@ export class TasksComponent implements OnInit, OnDestroy {
     { label: 'Выполненные', value: 'completed' }
   ];
 
+  readonly taskViews: Array<{ label: string; value: TaskView }> = [
+    { label: 'Все', value: 'all' },
+    { label: 'Сегодня', value: 'today' },
+    { label: 'Просроченные', value: 'overdue' },
+    { label: 'Важные', value: 'important' },
+    { label: 'Выполненные', value: 'completed' }
+  ];
+
   readonly dateFilters: Array<{ label: string; value: TaskDateFilter }> = [
     { label: 'Любая дата', value: 'all' },
     { label: 'Просроченные', value: 'overdue' },
@@ -107,6 +126,12 @@ export class TasksComponent implements OnInit, OnDestroy {
   ];
 
   readonly colorPresets = ['#3B82F6', '#22C55E', '#F59E0B', '#EF4444', '#8B5CF6', '#14B8A6'];
+  readonly aiQuestionExamples = [
+    'Что мне сделать сегодня?',
+    'Какие задачи просрочены?',
+    'Что у меня без дедлайна?',
+    'Какие задачи лучше перенести?'
+  ];
 
   readonly skeletonItems = [0, 1, 2];
   readonly statSkeletonItems = [0, 1, 2, 3];
@@ -132,6 +157,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   labels: Label[] = [];
   subtasksByTaskId: Record<number, Subtask[]> = {};
   activeFilter: TaskFilter = 'all';
+  activeTaskView: TaskView = 'all';
   activeProjectId: number | 'all' = 'all';
   activeLabelId: number | 'all' = 'all';
   activePriority: TaskPriority | 'all' = 'all';
@@ -147,10 +173,21 @@ export class TasksComponent implements OnInit, OnDestroy {
   isCreateModalOpen = false;
   isCreateProjectOpen = false;
   isCreateLabelOpen = false;
+  isFiltersOpen = false;
   formErrorMessage = '';
   editErrorMessage = '';
   listErrorMessage = '';
   searchQuery = '';
+  aiEnabled = false;
+  aiStatusMessage = 'Проверяем доступность AI.';
+  aiAskErrorMessage = '';
+  aiCleanupErrorMessage = '';
+  aiAskResponse: AiAskTasksResponse | null = null;
+  cleanupSuggestions: CleanupSuggestionView[] = [];
+  isAiAskLoading = false;
+  isAiCleanupLoading = false;
+  cleanupApplyingId: string | null = null;
+  private pendingFocusTaskId: number | null = null;
 
   constructor() {
     this.subscriptions.add(
@@ -166,10 +203,16 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.subscriptions.add(
       this.route.queryParamMap.subscribe((params) => {
         const projectParam = Number(params.get('project'));
+        const taskParam = Number(params.get('task'));
         this.activeProjectId = Number.isFinite(projectParam) && projectParam > 0 ? projectParam : 'all';
+        this.pendingFocusTaskId = Number.isFinite(taskParam) && taskParam > 0 ? taskParam : null;
+        if (params.get('create') === '1' && !this.isCreateModalOpen) {
+          window.setTimeout(() => this.openCreateModal(), 0);
+        }
       })
     );
     this.loadTasks();
+    this.loadAiStatus();
   }
 
   ngOnDestroy(): void {
@@ -229,6 +272,10 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   get progressMeta(): string {
     return `${this.completedCount} из ${this.totalCount} задач выполнено`;
+  }
+
+  get summaryLabel(): string {
+    return `${this.totalCount} ${this.pluralize(this.totalCount, 'задача', 'задачи', 'задач')} · ${this.activeCount} ${this.pluralize(this.activeCount, 'активная', 'активные', 'активных')} · ${this.highPriorityCount} ${this.pluralize(this.highPriorityCount, 'важная', 'важные', 'важных')}`;
   }
 
   get emptyState(): TasksEmptyState | null {
@@ -324,10 +371,166 @@ export class TasksComponent implements OnInit, OnDestroy {
           this.projects = projects;
           this.labels = labels;
           this.setTasks(tasks);
+          if (this.pendingFocusTaskId) {
+            this.focusTask(this.pendingFocusTaskId);
+          }
         },
         error: () => {
           this.listErrorMessage = 'Не удалось загрузить задачи и справочники.';
           this.toastService.show('Не удалось загрузить задачи', 'error');
+        }
+      });
+  }
+
+  loadAiStatus(): void {
+    this.aiService.getStatus().subscribe({
+      next: (status) => {
+        this.aiEnabled = status.enabled;
+        this.aiStatusMessage = status.message;
+      },
+      error: () => {
+        this.aiEnabled = false;
+        this.aiStatusMessage = 'AI-помощник временно недоступен. Попробуйте позже.';
+      }
+    });
+  }
+
+  useAiQuestion(question: string): void {
+    this.aiQuestionControl.setValue(question);
+  }
+
+  askTasks(): void {
+    const question = this.aiQuestionControl.value.trim();
+
+    if (!this.aiEnabled || this.isAiAskLoading || !question) {
+      return;
+    }
+
+    this.aiAskErrorMessage = '';
+    this.isAiAskLoading = true;
+    this.aiService
+      .askTasks(question)
+      .pipe(finalize(() => (this.isAiAskLoading = false)))
+      .subscribe({
+        next: (response) => {
+          this.aiAskResponse = response;
+        },
+        error: () => {
+          this.aiAskErrorMessage = 'AI не смог сформировать ответ. Попробуйте ещё раз.';
+          this.toastService.show('AI-ответ недоступен', 'error');
+        }
+      });
+  }
+
+  getCleanupSuggestions(): void {
+    if (!this.aiEnabled || this.isAiCleanupLoading || !this.tasks.length) {
+      return;
+    }
+
+    this.aiCleanupErrorMessage = '';
+    this.isAiCleanupLoading = true;
+    this.aiService
+      .getCleanupSuggestions()
+      .pipe(finalize(() => (this.isAiCleanupLoading = false)))
+      .subscribe({
+        next: (response) => {
+          this.cleanupSuggestions = response.suggestions.map((suggestion, index) => ({
+            ...suggestion,
+            localId: `${suggestion.taskId}-${suggestion.type}-${index}`
+          }));
+        },
+        error: () => {
+          this.aiCleanupErrorMessage = 'AI не смог сформировать ответ. Попробуйте ещё раз.';
+          this.toastService.show('AI-порядок недоступен', 'error');
+        }
+      });
+  }
+
+  relatedTasks(taskIds: number[]): Task[] {
+    const idSet = new Set(taskIds);
+    return this.tasks.filter((task) => idSet.has(task.id));
+  }
+
+  focusTask(taskId: number): void {
+    this.clearAdvancedFilters();
+    this.setFilter('all');
+    this.clearSearch();
+    window.setTimeout(() => {
+      document.getElementById(`task-${taskId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+  }
+
+  cleanupTaskTitle(taskId: number): string {
+    return this.tasks.find((task) => task.id === taskId)?.title ?? `Задача #${taskId}`;
+  }
+
+  cleanupPreview(suggestion: AiCleanupSuggestion): string[] {
+    const changes = suggestion.proposedChanges ?? {};
+    const preview: string[] = [];
+
+    if (changes.dueDate) {
+      preview.push(`Дедлайн: ${changes.dueDate}`);
+    }
+
+    if (changes.priority) {
+      preview.push(`Приоритет: ${this.priorityLabel(changes.priority)}`);
+    }
+
+    if (changes.projectName) {
+      preview.push(`Проект: ${changes.projectName}`);
+    }
+
+    if (changes.labelNames?.length) {
+      preview.push(`Метки: ${changes.labelNames.join(', ')}`);
+    }
+
+    if (changes.completed !== null && changes.completed !== undefined) {
+      preview.push(changes.completed ? 'Отметить выполненной' : 'Вернуть в активные');
+    }
+
+    return preview.length ? preview : ['AI предлагает проверить задачу вручную.'];
+  }
+
+  dismissCleanupSuggestion(suggestion: CleanupSuggestionView): void {
+    this.cleanupSuggestions = this.cleanupSuggestions.filter((item) => item.localId !== suggestion.localId);
+  }
+
+  applyCleanupSuggestion(suggestion: CleanupSuggestionView): void {
+    const task = this.tasks.find((item) => item.id === suggestion.taskId);
+
+    if (!task) {
+      this.dismissCleanupSuggestion(suggestion);
+      return;
+    }
+
+    const changes = suggestion.proposedChanges ?? {};
+    this.cleanupApplyingId = suggestion.localId;
+
+    forkJoin({
+      projectId: this.resolveProjectId(task, changes.projectName),
+      labelIds: this.resolveLabelIds(task, changes.labelNames ?? [])
+    })
+      .pipe(
+        switchMap(({ projectId, labelIds }) =>
+          this.taskService.updateTask(task.id, {
+            ...this.toPayloadFromTask(task),
+            completed: changes.completed ?? task.completed,
+            dueDate: changes.dueDate || task.dueDate || null,
+            priority: changes.priority ? this.normalizePriority(changes.priority) : this.taskPriority(task),
+            projectId,
+            labelIds
+          })
+        ),
+        finalize(() => (this.cleanupApplyingId = null))
+      )
+      .subscribe({
+        next: (updatedTask) => {
+          this.setTasks(this.tasks.map((item) => (item.id === updatedTask.id ? updatedTask : item)));
+          this.dismissCleanupSuggestion(suggestion);
+          this.toastService.show('Предложение применено', 'success');
+        },
+        error: () => {
+          this.toastService.show('Не удалось применить предложение', 'error');
         }
       });
   }
@@ -386,6 +589,39 @@ export class TasksComponent implements OnInit, OnDestroy {
         error: () => {
           this.formErrorMessage = 'Не удалось создать задачу.';
           this.toastService.show('Не удалось создать задачу', 'error');
+        }
+      });
+  }
+
+  quickAddTask(): void {
+    const title = this.quickAddControl.value.trim();
+
+    if (!title || this.isSaving) {
+      return;
+    }
+
+    this.isSaving = true;
+    this.taskService
+      .createTask({
+        title,
+        description: '',
+        completed: false,
+        priority: 'medium',
+        dueDate: null,
+        projectId: null,
+        labelIds: [],
+        color: '#3B82F6'
+      })
+      .pipe(finalize(() => (this.isSaving = false)))
+      .subscribe({
+        next: (createdTask) => {
+          this.setTasks([createdTask, ...this.tasks]);
+          this.quickAddControl.setValue('');
+          this.setTaskView('all');
+          this.toastService.show('Задача добавлена', 'success');
+        },
+        error: () => {
+          this.toastService.show('Не удалось добавить задачу', 'error');
         }
       });
   }
@@ -462,6 +698,17 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.activeFilter = filter;
   }
 
+  setTaskView(view: TaskView): void {
+    this.activeTaskView = view;
+    this.activeFilter = view === 'completed' ? 'completed' : view === 'all' ? 'all' : 'active';
+    this.activeDateFilter = view === 'today' ? 'today' : view === 'overdue' ? 'overdue' : 'all';
+    this.activePriority = view === 'important' ? 'high' : 'all';
+  }
+
+  toggleFilters(): void {
+    this.isFiltersOpen = !this.isFiltersOpen;
+  }
+
   setProjectFilter(event: Event): void {
     const value = this.selectValue(event);
     this.activeProjectId = value === 'all' ? 'all' : Number(value);
@@ -489,6 +736,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   clearAdvancedFilters(): void {
+    this.activeTaskView = 'all';
     this.activeFilter = 'all';
     this.activeProjectId = 'all';
     this.activeLabelId = 'all';
@@ -1126,6 +1374,53 @@ export class TasksComponent implements OnInit, OnDestroy {
     );
   }
 
+  private resolveProjectId(task: Task, projectName: string | null | undefined): Observable<number | null> {
+    const normalizedName = projectName?.trim();
+
+    if (!normalizedName) {
+      return of(task.project?.id ?? null);
+    }
+
+    const existingProject = this.projects.find((project) => project.name.toLowerCase() === normalizedName.toLowerCase());
+
+    if (existingProject) {
+      return of(existingProject.id);
+    }
+
+    return this.projectService.createProject({ name: normalizedName, color: task.color ?? '#3B82F6' }).pipe(
+      map((project) => {
+        this.projects = [...this.projects, project].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+        return project.id;
+      })
+    );
+  }
+
+  private resolveLabelIds(task: Task, labelNames: string[]): Observable<number[]> {
+    const currentIds = task.labels?.map((label) => label.id) ?? [];
+    const normalizedNames = [...new Set(labelNames.map((name) => name.trim()).filter(Boolean))];
+
+    if (!normalizedNames.length) {
+      return of(currentIds);
+    }
+
+    const existingByName = new Map(this.labels.map((label) => [label.name.toLowerCase(), label]));
+    const existingIds = normalizedNames
+      .map((name) => existingByName.get(name.toLowerCase())?.id)
+      .filter((id): id is number => typeof id === 'number');
+    const missingNames = normalizedNames.filter((name) => !existingByName.has(name.toLowerCase()));
+
+    if (!missingNames.length) {
+      return of([...new Set([...currentIds, ...existingIds])]);
+    }
+
+    return forkJoin(missingNames.map((name) => this.labelService.createLabel({ name, color: '#64748B' }))).pipe(
+      map((createdLabels) => {
+        this.labels = [...this.labels, ...createdLabels].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+        return [...new Set([...currentIds, ...existingIds, ...createdLabels.map((label) => label.id)])];
+      })
+    );
+  }
+
   private selectValue(event: Event): string {
     const target = event.target;
 
@@ -1164,6 +1459,25 @@ export class TasksComponent implements OnInit, OnDestroy {
     const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     return Math.round((normalizedDate.getTime() - normalizedToday.getTime()) / 86_400_000);
+  }
+
+  private pluralize(value: number, one: string, few: string, many: string): string {
+    const normalized = Math.abs(value) % 100;
+    const lastDigit = normalized % 10;
+
+    if (normalized > 10 && normalized < 20) {
+      return many;
+    }
+
+    if (lastDigit === 1) {
+      return one;
+    }
+
+    if (lastDigit >= 2 && lastDigit <= 4) {
+      return few;
+    }
+
+    return many;
   }
 
   private eventTarget(event?: Event): HTMLElement | null {

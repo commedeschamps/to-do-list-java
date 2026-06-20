@@ -24,6 +24,12 @@ public class TaskController {
         return ResponseEntity.ok(taskService.getAllTasks(username).stream().map(TaskResponse::from).toList());
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getById(@PathVariable Long id) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return ResponseEntity.ok(TaskResponse.from(taskService.getTask(username, id)));
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody TaskRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();

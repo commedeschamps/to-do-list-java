@@ -16,17 +16,17 @@
 
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <label class="field">
-          <span>Имя пользователя</span>
+          <span>Логин</span>
           <span class="input-shell input-shell-user">
             <input
               type="text"
               formControlName="username"
               autocomplete="username"
-              placeholder="Введите имя пользователя"
+              placeholder="Введите логин"
             >
           </span>
           @if (form.controls.username.touched && form.controls.username.invalid) {
-            <small class="field-error">Имя пользователя обязательно.</small>
+            <small class="field-error">Логин обязателен.</small>
           }
         </label>
 

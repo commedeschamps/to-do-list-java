@@ -1,0 +1,165 @@
+<button
+  class="ai-fab"
+  type="button"
+  title="AI-помощник"
+  aria-label="Открыть AI-помощника"
+  [attr.aria-expanded]="isOpen"
+  (click)="ui.open(activeTab)"
+>
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 2.75 13.45 8a3.6 3.6 0 0 0 2.55 2.55L21.25 12 16 13.45A3.6 3.6 0 0 0 13.45 16L12 21.25 10.55 16A3.6 3.6 0 0 0 8 13.45L2.75 12 8 10.55A3.6 3.6 0 0 0 10.55 8L12 2.75Z" />
+  </svg>
+</button>
+
+@if (isOpen) {
+  <button class="ai-assistant__backdrop" type="button" aria-label="Закрыть AI-помощника" (click)="ui.close()"></button>
+}
+
+<aside class="ai-assistant" [class.ai-assistant--open]="isOpen" aria-label="AI-помощник" [attr.aria-hidden]="!isOpen">
+  <header class="ai-assistant__header">
+    <div>
+      <h2>AI-помощник</h2>
+      <p class="ai-assistant__status" [class.ai-assistant__status--online]="aiEnabled">
+        <span aria-hidden="true"></span>
+        {{ aiEnabled ? 'Доступен' : 'Недоступен' }}
+      </p>
+    </div>
+    <button class="ai-assistant__close" type="button" aria-label="Закрыть" (click)="ui.close()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+    </button>
+  </header>
+
+  <nav class="ai-assistant__tabs" aria-label="Разделы AI-помощника">
+    @for (tab of tabs; track tab.value) {
+      <button type="button" [class.active]="activeTab === tab.value" (click)="selectTab(tab.value)">{{ tab.label }}</button>
+    }
+  </nav>
+
+  <div class="ai-assistant__body">
+    @if (!aiEnabled) {
+      <section class="ai-assistant__unavailable">
+        <h3>AI-помощник временно недоступен</h3>
+        <p>{{ statusMessage }}</p>
+      </section>
+    } @else if (!tasks.length) {
+      <section class="ai-assistant__unavailable">
+        <h3>Добавьте несколько задач</h3>
+        <p>После этого помощник сможет подготовить рекомендации.</p>
+      </section>
+    } @else {
+      @if (activeTab === 'ask') {
+        <section class="ai-assistant__intro">
+          <h3>{{ answer ? 'Уточнить ответ' : 'Чем помочь?' }}</h3>
+          <p>{{ answer ? 'Выберите следующий вопрос или напишите свой.' : 'Выберите быстрый вопрос или задайте свой.' }}</p>
+          <div class="ai-prompt-list" aria-label="Быстрые вопросы">
+            @for (prompt of quickPrompts; track prompt) {
+              <button type="button" [disabled]="isLoading" (click)="usePrompt(prompt)">{{ prompt }}</button>
+            }
+          </div>
+        </section>
+
+        @if (answer; as result) {
+          <section class="ai-response" aria-live="polite">
+            <div class="ai-response__section ai-response__lead">
+              <h3>Кратко</h3>
+              <p>{{ cleanText(result.answer) }}</p>
+            </div>
+
+            @if (result.suggestedActions.length) {
+              <div class="ai-response__section">
+                <h3>Рекомендации</h3>
+                <ol>
+                  @for (action of result.suggestedActions; track action) {
+                    <li>{{ cleanText(action) }}</li>
+                  }
+                </ol>
+              </div>
+            }
+
+            @if (relatedTasks(result.relatedTaskIds).length) {
+              <div class="ai-response__section">
+                <h3>Связанные задачи</h3>
+                <div class="ai-related-tasks">
+                  @for (task of relatedTasks(result.relatedTaskIds); track task.id) {
+                    <span>{{ task.title }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        }
+      }
+
+      @if (activeTab === 'plan') {
+        <section class="ai-mode-intro">
+          <div>
+            <h3>План на сегодня</h3>
+            <p>Приоритеты, порядок работы и предупреждения.</p>
+          </div>
+          <button type="button" [disabled]="!canRun" (click)="buildPlan()">{{ isLoading ? 'Составляем…' : 'Составить план' }}</button>
+        </section>
+        @if (todayPlan; as plan) {
+          <section class="ai-response" aria-live="polite">
+            <div class="ai-response__section ai-response__lead"><h3>Кратко</h3><p>{{ cleanText(plan.summary) }}</p></div>
+            @if (plan.topTasks.length) {
+              <div class="ai-response__section"><h3>Главное</h3><div class="ai-related-tasks">@for (item of plan.topTasks; track item.taskId) { <span><strong>{{ taskTitle(item.taskId) }}</strong><small>{{ cleanText(item.reason) }}</small></span> }</div></div>
+            }
+            @if (plan.plan.length) { <div class="ai-response__section"><h3>Рекомендуемый порядок</h3><ol>@for (step of plan.plan; track step) { <li>{{ cleanText(step) }}</li> }</ol></div> }
+            @if (plan.warnings.length) { <div class="ai-response__section"><h3>Обратите внимание</h3>@for (warning of plan.warnings; track warning) { <p>{{ cleanText(warning) }}</p> }</div> }
+          </section>
+        }
+      }
+
+      @if (activeTab === 'analysis') {
+        <section class="ai-mode-intro">
+          <div><h3>Анализ рисков</h3><p>Просрочки, перегрузка и задачи без ясного следующего шага.</p></div>
+          <button type="button" [disabled]="!canRun" (click)="analyzeRisks()">{{ isLoading ? 'Анализируем…' : 'Найти риски' }}</button>
+        </section>
+        @if (riskRadar; as radar) {
+          <section class="ai-response">
+            <div class="ai-response__section ai-response__lead"><h3>{{ riskLabel(radar.riskLevel) }}</h3><p>{{ cleanText(radar.summary) }}</p></div>
+            @for (risk of radar.risks; track risk.title) { <div class="ai-response__section"><h3>{{ cleanText(risk.title) }}</h3><p>{{ cleanText(risk.description) }}</p><strong>{{ cleanText(risk.suggestion) }}</strong></div> }
+          </section>
+        }
+      }
+
+      @if (activeTab === 'cleanup') {
+        <section class="ai-mode-intro">
+          <div><h3>Навести порядок</h3><p>Помощник предложит изменения, но ничего не применит сам.</p></div>
+          <button type="button" [disabled]="!canRun" (click)="getCleanupSuggestions()">{{ isLoading ? 'Ищем…' : 'Найти улучшения' }}</button>
+        </section>
+        @if (cleanupSuggestions.length) {
+          <section class="ai-response">@for (suggestion of cleanupSuggestions; track suggestion.taskId + suggestion.type) { <div class="ai-response__section"><span class="ai-response__task">{{ taskTitle(suggestion.taskId) }}</span><h3>{{ cleanText(suggestion.title) }}</h3><p>{{ cleanText(suggestion.description) }}</p><div class="ai-response__meta">@for (item of cleanupPreview(suggestion); track item) { <span>{{ item }}</span> }</div></div> }</section>
+        }
+      }
+
+      @if (activeTab === 'summary') {
+        <section class="ai-mode-intro">
+          <div><h3>Итоги недели</h3><p>Прогресс, сложности и ориентиры на следующую неделю.</p></div>
+          <button type="button" [disabled]="!canRun" (click)="buildWeeklySummary()">{{ isLoading ? 'Собираем…' : 'Подвести итоги' }}</button>
+        </section>
+        @if (weeklySummary; as weekly) {
+          <section class="ai-response">
+            <div class="ai-response__section ai-response__lead"><h3>Кратко</h3><p>{{ cleanText(weekly.summary) }}</p></div>
+            <div class="ai-response__section"><h3>Результат</h3><p>{{ weekly.completedCount }} выполнено · {{ weekly.createdCount }} создано</p></div>
+            @if (weekly.highlights.length) { <div class="ai-response__section"><h3>Что получилось</h3><ul>@for (item of weekly.highlights; track item) { <li>{{ cleanText(item) }}</li> }</ul></div> }
+            @if (weekly.nextWeekSuggestions.length) { <div class="ai-response__section"><h3>Следующая неделя</h3><ol>@for (item of weekly.nextWeekSuggestions; track item) { <li>{{ cleanText(item) }}</li> }</ol></div> }
+          </section>
+        }
+      }
+    }
+
+    @if (isLoading) { <p class="ai-assistant__loading" aria-live="polite">Помощник готовит ответ…</p> }
+    @if (errorMessage) { <div class="ai-assistant__error" role="alert">{{ errorMessage }}</div> }
+  </div>
+
+  <footer class="ai-assistant__composer">
+    <div>
+      <input id="assistant-question" type="text" aria-label="Спросите о задачах" [formControl]="questionControl" (keydown.enter)="ask()" placeholder="Спросите о задачах…">
+      <button type="button" aria-label="Отправить" [disabled]="!canRun || !questionControl.value.trim()" (click)="ask()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 14-7-4 14-3-6-7-1Z" /></svg>
+      </button>
+    </div>
+    <p>AI может ошибаться. Проверяйте важные рекомендации.</p>
+  </footer>
+</aside>

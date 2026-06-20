@@ -14,6 +14,9 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByUserId(@Param("userId") Long userId);
 
     @EntityGraph(attributePaths = {"project", "labels", "subtasks"})
+    List<Task> findByUserUsername(String username);
+
+    @EntityGraph(attributePaths = {"project", "labels", "subtasks"})
     Optional<Task> findByIdAndUserUsername(Long id, String username);
 
     List<Task> findByProjectIdAndUserUsername(Long projectId, String username);

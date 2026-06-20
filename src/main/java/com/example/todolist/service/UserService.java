@@ -41,6 +41,7 @@ public class UserService implements UserDetailsService {
 
         User user = new User();
         user.setUsername(normalizedUsername);
+        user.setDisplayName(normalizedUsername);
         user.setPassword(passwordEncoder.encode(password));
         return userRepository.save(user);
     }
@@ -48,5 +49,13 @@ public class UserService implements UserDetailsService {
     public User getByUsername(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+    }
+
+    public User updateDisplayName(String username, String displayName) {
+        User user = getByUsername(username);
+        String normalizedDisplayName = displayName == null ? null : displayName.trim();
+
+        user.setDisplayName(normalizedDisplayName == null || normalizedDisplayName.isBlank() ? null : normalizedDisplayName);
+        return userRepository.save(user);
     }
 }

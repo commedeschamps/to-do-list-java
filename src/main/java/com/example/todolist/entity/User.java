@@ -20,6 +20,9 @@ public class User {
     @Column(unique = true, nullable = false)
     private String username;
 
+    @Column(name = "display_name", length = 80)
+    private String displayName;
+
     @Column(nullable = false)
     @JsonIgnore
     private String password;

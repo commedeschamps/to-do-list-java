@@ -44,6 +44,11 @@ public class TaskService {
         return taskRepository.findByUserId(userId);
     }
 
+    @Transactional(readOnly = true)
+    public Task getTask(String username, Long id) {
+        return getOwnedTask(username, id);
+    }
+
     @Transactional
     public Task createTask(
             String username,

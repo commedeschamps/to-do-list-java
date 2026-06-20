@@ -41,6 +41,12 @@ export class AuthService {
       .pipe(tap((user) => this.saveCurrentUser(user)));
   }
 
+  updateProfile(displayName: string): Observable<CurrentUser> {
+    return this.http
+      .put<CurrentUser>(`${this.apiUrl}/me/profile`, { displayName })
+      .pipe(tap((user) => this.saveCurrentUser(user)));
+  }
+
   saveToken(token: string): void {
     localStorage.setItem(this.tokenKey, token);
   }
@@ -67,6 +73,11 @@ export class AuthService {
 
   getCurrentUser(): CurrentUser | null {
     return this.currentUserSubject.value;
+  }
+
+  getDisplayName(user: CurrentUser | null = this.getCurrentUser()): string {
+    const displayName = user?.displayName?.trim();
+    return displayName || user?.username || 'Пользователь';
   }
 
   isAuthenticated(): boolean {
@@ -161,7 +172,8 @@ export class AuthService {
 
         return {
           id: parsed.id,
-          username
+          username,
+          displayName: typeof parsed.displayName === 'string' ? parsed.displayName : null
         };
       }
 
